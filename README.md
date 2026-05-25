@@ -46,7 +46,7 @@ App disponible en <http://localhost:5173/>.
 
 ```powershell
 corepack pnpm build
-```
+``` 
 
 El bundle estático queda en `dist/` y puede servirse desde cualquier servidor HTTP.
 
