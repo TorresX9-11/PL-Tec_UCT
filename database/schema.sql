@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   correo_usuario VARCHAR(32) NOT NULL,
   nombre         VARCHAR(128),
   contrasena     VARCHAR(32) NOT NULL,
-  nivel          ENUM('docente', 'coordinador', 'admin'),
+  nivel          ENUM('docente', 'coordinador', 'academico', 'admin'),
   PRIMARY KEY (correo_usuario)
 );
 
