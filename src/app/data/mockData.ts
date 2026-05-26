@@ -188,6 +188,9 @@ export interface Boleta {
   nombre: string;
   archivo: string;
   fecha: string;
+  // Estado de procesamiento por el área administrativa (opcional para compat con datos existentes)
+  estado?: 'Subida' | 'Procesada' | 'Con Observación';
+  observaciones?: string;
 }
 
 export interface DocenteAcademico {
@@ -229,8 +232,10 @@ export const mockDocentesAcademicos: DocenteAcademico[] = [
     notasTotales: 4,
     guiaAprendizaje: 'Validado',
     boletas: [
-      { id: 1, nombre: 'Boleta Marzo 2026', archivo: 'boleta_marzo_2026.pdf', fecha: '15 Marzo 2026' },
-      { id: 2, nombre: 'Boleta Febrero 2026', archivo: 'boleta_febrero_2026.pdf', fecha: '15 Febrero 2026' }
+      { id: 1, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 2, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
+      { id: 3, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
+      { id: 4, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
     ],
     password: 'docente123'
   },
@@ -250,7 +255,8 @@ export const mockDocentesAcademicos: DocenteAcademico[] = [
     notasTotales: 4,
     guiaAprendizaje: 'Pendiente',
     boletas: [
-      { id: 3, nombre: 'Boleta Marzo 2026', archivo: 'boleta_marzo_2026.pdf', fecha: '10 Marzo 2026' }
+      { id: 5, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 6, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' }
     ],
     password: 'docente123'
   },
@@ -288,7 +294,10 @@ export const mockDocentesAcademicos: DocenteAcademico[] = [
     notasTotales: 4,
     guiaAprendizaje: 'Validado',
     boletas: [
-      { id: 4, nombre: 'Boleta Marzo 2026', archivo: 'boleta_marzo_2026.pdf', fecha: '12 Marzo 2026' }
+      { id: 7, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 8, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
+      { id: 9, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
+      { id: 10, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
     ],
     password: 'docente123'
   }
@@ -618,3 +627,170 @@ export const mockPropuestasSemestrales: PropuestaSemestral[] = [
     recepcionBHE: true
   }
 ];
+
+// ================================
+// CUOTAS MENSUALES (NUEVO - fase 1 refactor)
+// ================================
+// Esta es la fuente de verdad cuota-a-cuota: cada cuota tiene su boleta embebida
+// (si fue subida). Reemplaza la lógica suelta de `propuesta.boletasSubidas` que
+// quedaba desincronizada con `docente.boletas[]`. Se mantienen ambos arrays
+// existentes por compat con páginas actuales; las nuevas vistas usan helpers.
+
+// Helper interno para construir cuotas pagadas con boleta procesada
+function _cuotaPagada(
+  id: number,
+  propuestaId: number,
+  numeroCuota: number,
+  mes: string,
+  montoBruto: number,
+  fechaPago: string,
+  boleta: Boleta
+): CuotaMensual {
+  return {
+    id,
+    propuestaId,
+    numeroCuota,
+    mes,
+    montoBruto,
+    estadoPago: 'Pagada',
+    fechaPago,
+    boletaId: boleta.id,
+    boletaEstado: 'Procesada'
+  };
+}
+
+function _cuotaPendiente(
+  id: number,
+  propuestaId: number,
+  numeroCuota: number,
+  mes: string,
+  montoBruto: number
+): CuotaMensual {
+  return {
+    id,
+    propuestaId,
+    numeroCuota,
+    mes,
+    montoBruto,
+    estadoPago: 'Pendiente',
+    boletaEstado: 'Inexistente'
+  };
+}
+
+// Mock cuotas: derivadas de cada propuesta. La boleta vinculada vive en
+// `mockDocentesAcademicos[id].boletas[]` y se enlaza por boletaId.
+export const mockCuotasMensuales: CuotaMensual[] = [
+  // Juan (propuesta 1, diurno, 4 cuotas, todas pagadas)
+  _cuotaPagada(1, 1, 1, 'Abril 2026',  862500, '2026-04-30', mockDocentesAcademicos[0].boletas[0]),
+  _cuotaPagada(2, 1, 2, 'Mayo 2026',   862500, '2026-05-30', mockDocentesAcademicos[0].boletas[1]),
+  _cuotaPagada(3, 1, 3, 'Junio 2026',  862500, '2026-06-30', mockDocentesAcademicos[0].boletas[2]),
+  _cuotaPagada(4, 1, 4, 'Julio 2026',  862500, '2026-07-30', mockDocentesAcademicos[0].boletas[3]),
+
+  // María (propuesta 2, diurno, 4 cuotas: 2 pagadas + 2 pendientes)
+  _cuotaPagada(5, 2, 1, 'Abril 2026',  390000, '2026-04-30', mockDocentesAcademicos[1].boletas[0]),
+  _cuotaPagada(6, 2, 2, 'Mayo 2026',   390000, '2026-05-30', mockDocentesAcademicos[1].boletas[1]),
+  _cuotaPendiente(7, 2, 3, 'Junio 2026',  390000),
+  _cuotaPendiente(8, 2, 4, 'Julio 2026',  390000),
+
+  // Pedro (propuesta 3, diurno por sus secciones, 4 cuotas, todas pendientes)
+  _cuotaPendiente(9,  3, 1, 'Abril 2026', 337500),
+  _cuotaPendiente(10, 3, 2, 'Mayo 2026',  337500),
+  _cuotaPendiente(11, 3, 3, 'Junio 2026', 337500),
+  _cuotaPendiente(12, 3, 4, 'Julio 2026', 337500),
+
+  // Ana (propuesta 4, diurno, 4 cuotas, todas pagadas)
+  _cuotaPagada(13, 4, 1, 'Abril 2026', 552500, '2026-04-30', mockDocentesAcademicos[3].boletas[0]),
+  _cuotaPagada(14, 4, 2, 'Mayo 2026',  552500, '2026-05-30', mockDocentesAcademicos[3].boletas[1]),
+  _cuotaPagada(15, 4, 3, 'Junio 2026', 552500, '2026-06-30', mockDocentesAcademicos[3].boletas[2]),
+  _cuotaPagada(16, 4, 4, 'Julio 2026', 552500, '2026-07-30', mockDocentesAcademicos[3].boletas[3])
+];
+
+// ================================
+// HELPERS TIPADOS (NUEVO - fase 1 refactor)
+// ================================
+// Funciones de acceso reutilizables entre los 3 módulos (admin/académico/docente).
+// Cuando se conecte el backend NestJS, esta capa se reemplaza por `src/app/data/api.ts`
+// con la misma firma → ningún componente cambia.
+
+/** Busca un docente (vista académica) por id. */
+export function getDocenteById(id: number): DocenteAcademico | undefined {
+  return mockDocentesAcademicos.find(d => d.id === id);
+}
+
+/** Busca un docente (vista admin) por id. */
+export function getDocenteAdminById(id: number): Docente | undefined {
+  return mockDocentes.find(d => d.id === id);
+}
+
+/** Login: busca docente por correo/RUT + password. */
+export function getDocenteByCredenciales(login: string, password: string): DocenteAcademico | undefined {
+  return mockDocentesAcademicos.find(
+    d => (d.correo === login || d.rut === login) && d.password === password
+  );
+}
+
+/** Devuelve la propuesta semestral activa de un docente. */
+export function getPropuestaDocente(
+  docenteId: number,
+  semestre: number = 1,
+  año: number = 2026
+): PropuestaSemestral | undefined {
+  return mockPropuestasSemestrales.find(
+    p => p.docenteId === docenteId && p.semestre === semestre && p.año === año
+  );
+}
+
+/** Devuelve todas las cuotas mensuales de un docente para un semestre. */
+export function getCuotasDocente(
+  docenteId: number,
+  semestre: number = 1,
+  año: number = 2026
+): CuotaMensual[] {
+  const propuesta = getPropuestaDocente(docenteId, semestre, año);
+  if (!propuesta) return [];
+  return mockCuotasMensuales.filter(c => c.propuestaId === propuesta.id);
+}
+
+/** Devuelve las cuotas SIN boleta subida (= boletas que el docente debe subir). */
+export function getBoletasPendientes(
+  docenteId: number,
+  semestre: number = 1,
+  año: number = 2026
+): CuotaMensual[] {
+  return getCuotasDocente(docenteId, semestre, año).filter(
+    c => !c.boletaId || c.boletaEstado === 'Inexistente'
+  );
+}
+
+/** Devuelve los ramos asignados a un docente con asignatura y carrera resueltas. */
+export function getRamosDocente(docenteId: number) {
+  return mockSeccionesAsignaturas
+    .filter(s => s.docenteId === docenteId)
+    .map(s => {
+      const asignatura = mockAsignaturas.find(a => a.id === s.asignaturaId);
+      const carrera = asignatura ? mockCarreras.find(c => c.id === asignatura.carreraId) : undefined;
+      return {
+        seccion: s,
+        asignatura,
+        carrera,
+        horasTotal: s.horasP + s.horasM + s.horasA
+      };
+    });
+}
+
+/** Genera el listado de meses esperados para las cuotas según jornada y semestre. */
+export function getMesesCuotas(
+  jornada: 'Diurna' | 'Vespertina',
+  semestre: number,
+  año: number
+): string[] {
+  if (semestre === 1) {
+    const meses = ['Abril', 'Mayo', 'Junio', 'Julio'];
+    if (jornada === 'Vespertina') meses.push('Agosto');
+    return meses.map(m => `${m} ${año}`);
+  }
+  // Semestre 2
+  const meses = ['Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  if (jornada === 'Vespertina') meses.push('Enero');
+  return meses.map(m => `${m} ${año}`);
+}

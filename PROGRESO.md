@@ -17,25 +17,25 @@
 
 - **Frontend:** React 18 + TypeScript + Vite 6 + TailwindCSS v4 + shadcn/ui (Radix) + MUI + `react-router` v7.
 - **Estado:** mock data en `src/app/data/mockData.ts` (sin backend conectado todavía).
-- **Backend futuro:** PHP con API REST (cuando esté lista la BD del cliente). El frontend se mantiene como SPA y consumirá la API por `fetch`.
+- **Backend futuro:** **NestJS** (API REST tipada con DTOs). El frontend se mantiene como SPA y consumirá la API por `fetch`. Se planificará una capa `src/app/data/api.ts` con tipos compartidos cliente↔servidor.
 - **Gestor de paquetes:** **pnpm únicamente** (vía Corepack). NO usar `npm` por filtración reciente en el registro.
 
 ### Decisión de arquitectura
-Se evaluó migrar a HTML+CSS+JS puro y se descartó: ya hay ~80 archivos hechos (3 layouts, ~20 páginas con tablas complejas, lib shadcn/ui completa). Vite genera bundle estático servible desde cualquier servidor (Apache/Nginx/IIS) con backend PHP REST independiente.
+Se evaluó migrar a HTML+CSS+JS puro y se descartó: ya hay ~80 archivos hechos (3 layouts, ~20 páginas con tablas complejas, lib shadcn/ui completa). Vite genera bundle estático servible desde cualquier servidor estático; el backend NestJS corre independiente y se consume vía REST.
 
 ---
 
 ## 3. Cómo correr el proyecto
 
 ```powershell
-# Una sola vez (instalación)
-corepack pnpm install
+# Una sola vez (instalación) — usar --ignore-scripts para evitar bloqueo de build scripts
+corepack pnpm install --ignore-scripts
 
-# Levantar dev server (workaround por bug de pnpm v11 con builds nativos)
+# Levantar dev server
 .\node_modules\.bin\vite.cmd --port 5173
 ```
 
-> **Nota pnpm v11:** bloquea comandos hasta aprobar build scripts (esbuild, @tailwindcss/oxide, core-js). Bypass: ejecutar Vite directo desde `node_modules\.bin`.
+> **Nota pnpm v11:** `corepack pnpm install` (sin flags) bloquea con error al intentar ejecutar build scripts nativos (esbuild, @tailwindcss/oxide, core-js). Usar siempre `--ignore-scripts`.
 
 URL local: <http://localhost:5173/>
 
@@ -110,7 +110,7 @@ Archivos en `src/app/pages/admin/` que el usuario aún no expone:
 - [ ] Recibir BD definitiva del cliente.
 - [ ] Definir qué hacer con las páginas huérfanas (enrutar vs eliminar vs fusionar).
 - [ ] Confirmar tarifas por nivel docente (A/B/C).
-- [ ] Diseñar backend PHP API REST cuando llegue la BD.
+- [ ] Diseñar backend **NestJS** (REST + DTOs) cuando llegue la BD.
   - Crear `src/app/data/api.ts` con funciones tipadas que devuelvan los mismos shapes del mock.
   - Mapeo BD → frontend: `rut_docente`→`rut`, `nivel_docente`→`nivelDocente`, `valor_propuesta`→`montoTotalPropuesta`, `notas_ingresadas`/`notas_curso`→`notasIngresadas`/`notasTotales`.
   - Estados derivados (`boletasEstado`, `valorCuotaBruto`, `saldo`) los calcula backend o frontend.
