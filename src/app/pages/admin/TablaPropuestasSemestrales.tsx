@@ -1,8 +1,24 @@
-import { useState } from 'react';
-import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Mail, Pencil } from 'lucide-react';
-import { mockPropuestasSemestrales, mockDocentesMaestros, type PropuestaSemestral } from '../../data/mockData';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Mail, Pencil, MessageSquare } from 'lucide-react';
+import {
+  mockPropuestasSemestrales,
+  mockDocentesMaestros,
+  mockSeccionesAsignaturas,
+  mockAsignaturas,
+  calcularPropuestaSemestral,
+  getCuotasDocente,
+  type PropuestaSemestral,
+  type CuotaMensual
+} from '../../data/mockData';
+import {
+  loadMensajes,
+  setMensajeCuota,
+  subscribeMensajes,
+  type MensajesPorCuota
+} from '../../data/mensajesAdmin';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Textarea } from '../../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -10,14 +26,77 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
 
+const SEMESTRE_ACTUAL = 1;
+const AÑO_ACTUAL = 2026;
+const STORAGE_KEY_VALORES = 'valores_propuesta_manual';
+
+// Overrides de demo: estado de pago/boletas que vienen del mock.
+// Cuando exista el backend NestJS, este mapa se reemplaza por la data real.
+const overridesDemo: Record<number, Partial<PropuestaSemestral>> = mockPropuestasSemestrales.reduce(
+  (acc, p) => {
+    acc[p.docenteId] = {
+      estadoPago: p.estadoPago,
+      cuotasPagadas: p.cuotasPagadas,
+      boletasSubidas: p.boletasSubidas,
+      boletasEstado: p.boletasEstado,
+      recepcionBHE: p.recepcionBHE
+    };
+    return acc;
+  },
+  {} as Record<number, Partial<PropuestaSemestral>>
+);
+
 export function TablaPropuestasSemestrales() {
-  const [propuestas, setPropuestas] = useState<PropuestaSemestral[]>(mockPropuestasSemestrales);
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFilter, setEstadoFilter] = useState<string>('todos');
   const [boletasFilter, setBoletasFilter] = useState<string>('todos');
   const [editValorOpen, setEditValorOpen] = useState(false);
   const [propuestaEnEdicion, setPropuestaEnEdicion] = useState<PropuestaSemestral | null>(null);
   const [valorInput, setValorInput] = useState<number>(0);
+
+  // Valor total manual por docente (persistido en localStorage)
+  const [valoresManuales, setValoresManuales] = useState<Record<number, number>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_VALORES);
+      if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    // Seed inicial con los valores del mock para que la primera carga muestre datos
+    return mockPropuestasSemestrales.reduce((acc, p) => {
+      acc[p.docenteId] = p.montoTotalPropuesta;
+      return acc;
+    }, {} as Record<number, number>);
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_VALORES, JSON.stringify(valoresManuales));
+  }, [valoresManuales]);
+
+  // Recalcula propuestas en vivo a partir de las secciones asignadas + valor manual
+  const propuestas = useMemo<PropuestaSemestral[]>(() => {
+    const docenteIds = Array.from(
+      new Set(
+        mockSeccionesAsignaturas
+          .map(s => s.docenteId)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+    return docenteIds
+      .map(docenteId => {
+        const valor = valoresManuales[docenteId] ?? 0;
+        const base = calcularPropuestaSemestral(docenteId, SEMESTRE_ACTUAL, AÑO_ACTUAL, valor);
+        if (base.totalHoras === 0) return null;
+        const override = overridesDemo[docenteId] ?? {};
+        const cuotasPagadas = override.cuotasPagadas ?? 0;
+        const pagado = cuotasPagadas * base.valorCuotaBruto;
+        return {
+          ...base,
+          ...override,
+          saldo: Math.max(base.montoTotalPropuesta - pagado, 0)
+        } as PropuestaSemestral;
+      })
+      .filter((p): p is PropuestaSemestral => p !== null)
+      .sort((a, b) => a.docenteId - b.docenteId);
+  }, [valoresManuales]);
 
   const abrirEditarValor = (prop: PropuestaSemestral) => {
     setPropuestaEnEdicion(prop);
@@ -31,16 +110,9 @@ export function TablaPropuestasSemestrales() {
       toast.error('El valor total no puede ser negativo');
       return;
     }
-    setPropuestas(propuestas.map(p => {
-      if (p.id !== propuestaEnEdicion.id) return p;
-      const nuevoCuota = p.numeroCuotas > 0 ? Math.round(valorInput / p.numeroCuotas) : 0;
-      const pagado = p.cuotasPagadas * nuevoCuota;
-      return {
-        ...p,
-        montoTotalPropuesta: valorInput,
-        valorCuotaBruto: nuevoCuota,
-        saldo: Math.max(valorInput - pagado, 0)
-      };
+    setValoresManuales((prev: Record<number, number>) => ({
+      ...prev,
+      [propuestaEnEdicion.docenteId]: valorInput
     }));
     toast.success('Valor total actualizado');
     setEditValorOpen(false);
@@ -340,14 +412,16 @@ export function TablaPropuestasSemestrales() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
-                              <DialogHeader>
+                            <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
+                              <DialogHeader className="shrink-0 border-b px-6 py-4">
                                 <DialogTitle>Detalle de Propuesta</DialogTitle>
                                 <DialogDescription>
                                   {getDocenteNombre(prop.docenteId)} • {prop.semestre}-{prop.año}
                                 </DialogDescription>
                               </DialogHeader>
-                              <DetallePropuesta propuesta={prop} />
+                              <div className="flex-1 overflow-y-auto px-6 py-4">
+                                <DetallePropuesta propuesta={prop} />
+                              </div>
                             </DialogContent>
                           </Dialog>
                         </div>
@@ -464,18 +538,59 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
   };
 
-  // Mock de cuotas mensuales
-  const meses = propuesta.numeroCuotas === 4
-    ? ['Marzo', 'Abril', 'Mayo', 'Junio']
-    : ['Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'];
+  // --- Cambio 2: Ramos asignados al docente ---
+  const seccionesDocente = mockSeccionesAsignaturas.filter(s => s.docenteId === propuesta.docenteId);
+  const ramosDocente = seccionesDocente.map(sec => {
+    const asignatura = mockAsignaturas.find(a => a.id === sec.asignaturaId);
+    return {
+      id: sec.id,
+      nombre: asignatura?.nombre ?? 'Desconocida',
+      sigla: asignatura?.sigla ?? '—',
+      seccion: sec.seccion,
+      horasP: sec.horasP,
+      horasM: sec.horasM,
+      horasA: sec.horasA,
+      total: sec.horasP + sec.horasM + sec.horasA
+    };
+  });
+  const totalRamosP = ramosDocente.reduce((s, r) => s + r.horasP, 0);
+  const totalRamosM = ramosDocente.reduce((s, r) => s + r.horasM, 0);
+  const totalRamosA = ramosDocente.reduce((s, r) => s + r.horasA, 0);
+  const totalRamosHoras = totalRamosP + totalRamosM + totalRamosA;
 
-  const cuotasMock = meses.map((mes, index) => ({
-    numero: index + 1,
-    mes,
-    monto: propuesta.valorCuotaBruto,
-    estado: index < propuesta.cuotasPagadas ? 'Pagada' : 'Pendiente',
-    boletaEstado: index < propuesta.boletasSubidas ? 'Subida' : 'Inexistente'
-  }));
+  // --- Cuotas reales del docente (desde mockData, base para sincronizar con docente) ---
+  const cuotasDocente: CuotaMensual[] = useMemo(
+    () => getCuotasDocente(propuesta.docenteId, propuesta.semestre, propuesta.año),
+    [propuesta.docenteId, propuesta.semestre, propuesta.año]
+  );
+
+  // --- Cambio 3: Mensajes/notas por cuota (centralizado en mensajesAdmin.ts) ---
+  const [mensajes, setMensajes] = useState<MensajesPorCuota>(() => loadMensajes(propuesta.docenteId));
+
+  useEffect(() => {
+    setMensajes(loadMensajes(propuesta.docenteId));
+    return subscribeMensajes(propuesta.docenteId, setMensajes);
+  }, [propuesta.docenteId]);
+
+  const [mensajeOpen, setMensajeOpen] = useState(false);
+  const [mensajeCuota, setMensajeCuotaState] = useState<CuotaMensual | null>(null);
+  const [mensajeInput, setMensajeInput] = useState('');
+
+  const abrirMensaje = (cuota: CuotaMensual) => {
+    setMensajeCuotaState(cuota);
+    setMensajeInput(mensajes[cuota.id] ?? '');
+    setMensajeOpen(true);
+  };
+
+  const guardarMensaje = () => {
+    if (!mensajeCuota) return;
+    const next = setMensajeCuota(propuesta.docenteId, mensajeCuota.id, mensajeInput);
+    setMensajes(next);
+    toast.success('Nota guardada y sincronizada al docente');
+    setMensajeOpen(false);
+    setMensajeCuotaState(null);
+    setMensajeInput('');
+  };
 
   return (
     <div className="space-y-6">
@@ -514,6 +629,65 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
         </CardContent>
       </Card>
 
+      {/* Cambio 2: Ramos Asignados */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ramos Asignados</CardTitle>
+          <CardDescription>
+            {ramosDocente.length} sección(es) asignada(s) al docente este semestre
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ramosDocente.length === 0 ? (
+            <p className="text-sm text-gray-500">Este docente no tiene ramos asignados.</p>
+          ) : (
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Asignatura</TableHead>
+                  <TableHead>Sigla</TableHead>
+                  <TableHead className="text-center">Sección</TableHead>
+                  <TableHead className="text-center">Hrs P</TableHead>
+                  <TableHead className="text-center">Hrs M</TableHead>
+                  <TableHead className="text-center">Hrs A</TableHead>
+                  <TableHead className="text-center">Total Hrs</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ramosDocente.map((ramo) => (
+                  <TableRow key={ramo.id}>
+                    <TableCell className="font-medium">{ramo.nombre}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{ramo.sigla}</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{ramo.seccion}</TableCell>
+                    <TableCell className="text-center bg-blue-50 font-semibold text-blue-900">
+                      {ramo.horasP}
+                    </TableCell>
+                    <TableCell className="text-center bg-purple-50 font-semibold text-purple-900">
+                      {ramo.horasM}
+                    </TableCell>
+                    <TableCell className="text-center bg-green-50 font-semibold text-green-900">
+                      {ramo.horasA}
+                    </TableCell>
+                    <TableCell className="text-center font-bold">{ramo.total}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-gray-50 font-bold">
+                  <TableCell colSpan={3}>Total</TableCell>
+                  <TableCell className="text-center">{totalRamosP}</TableCell>
+                  <TableCell className="text-center">{totalRamosM}</TableCell>
+                  <TableCell className="text-center">{totalRamosA}</TableCell>
+                  <TableCell className="text-center">{totalRamosHoras}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Resumen de Horas PMA */}
       <Card>
         <CardHeader>
@@ -547,6 +721,7 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
           <CardTitle>Detalle de Cuotas Mensuales</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -555,41 +730,63 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
                 <TableHead className="text-right">Monto Bruto</TableHead>
                 <TableHead>Estado Pago</TableHead>
                 <TableHead>Estado Boleta</TableHead>
+                <TableHead className="text-center">Mensaje / Nota</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cuotasMock.map((cuota) => (
-                <TableRow key={cuota.numero}>
-                  <TableCell className="font-medium">{cuota.numero}</TableCell>
-                  <TableCell>{cuota.mes} 2026</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatCurrency(cuota.monto)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={cuota.estado === 'Pagada' ? 'default' : 'destructive'}>
-                      {cuota.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        cuota.boletaEstado === 'Subida'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }
-                    >
-                      {cuota.boletaEstado}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {cuotasDocente.map((cuota) => {
+                const tieneMensaje = Boolean(mensajes[cuota.id]);
+                const boletaEstado = cuota.boletaEstado ?? 'Inexistente';
+                return (
+                  <TableRow key={cuota.id}>
+                    <TableCell className="font-medium">{cuota.numeroCuota}</TableCell>
+                    <TableCell>{cuota.mes}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(cuota.montoBruto)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={cuota.estadoPago === 'Pagada' ? 'default' : 'destructive'}>
+                        {cuota.estadoPago}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          boletaEstado === 'Subida' || boletaEstado === 'Procesada'
+                            ? 'bg-green-100 text-green-800'
+                            : boletaEstado === 'Con Observación'
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-gray-100 text-gray-600'
+                        }
+                      >
+                        {boletaEstado}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={tieneMensaje ? 'Editar nota' : 'Agregar nota'}
+                        onClick={() => abrirMensaje(cuota)}
+                      >
+                        <MessageSquare
+                          className={`h-4 w-4 ${tieneMensaje ? 'text-blue-600' : 'text-gray-400'}`}
+                        />
+                        {tieneMensaje && (
+                          <span className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600" />
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               <TableRow className="bg-gray-50 font-bold">
                 <TableCell colSpan={2}>Total</TableCell>
                 <TableCell className="text-right">
                   {formatCurrency(propuesta.montoTotalPropuesta)}
                 </TableCell>
-                <TableCell colSpan={2}>
+                <TableCell colSpan={3}>
                   <span className="text-sm text-gray-600">
                     Saldo Pendiente: {formatCurrency(propuesta.saldo)}
                   </span>
@@ -597,8 +794,45 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Dialog: editar mensaje del mes */}
+      <Dialog open={mensajeOpen} onOpenChange={(open: boolean) => {
+        setMensajeOpen(open);
+        if (!open) {
+          setMensajeCuotaState(null);
+          setMensajeInput('');
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Nota — {mensajeCuota?.mes ?? ''}
+            </DialogTitle>
+            <DialogDescription>
+              El docente verá esta nota junto a la boleta de este mes en su módulo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              rows={5}
+              placeholder="Escriba una observación o recordatorio para este mes..."
+              value={mensajeInput}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMensajeInput(e.target.value)}
+            />
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setMensajeOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" className="flex-1" onClick={guardarMensaje}>
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo } from 'react';
-import { FileText, Trash2, Download, Eye, AlertCircle, Upload, CheckCircle2 } from 'lucide-react';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { FileText, Trash2, Download, Eye, AlertCircle, Upload, CheckCircle2, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
@@ -21,6 +21,11 @@ import {
   mockDocentesAcademicos,
   type Boleta
 } from '../../data/mockData';
+import {
+  loadMensajes,
+  subscribeMensajes,
+  type MensajesPorCuota
+} from '../../data/mensajesAdmin';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -46,6 +51,37 @@ export function DocenteBoletas() {
   const boletas = useMemo(() => (docente ? [...docente.boletas].reverse() : []), [docente, version]);
   const cuotasPendientes = useMemo(() => getBoletasPendientes(docenteId), [docenteId, version]);
   const cuotasDelDocente = useMemo(() => getCuotasDocente(docenteId), [docenteId, version]);
+
+  // Notas del administrador (solo lectura, keyed por cuotaId) — centralizado en mensajesAdmin.ts
+  const [notasAdmin, setNotasAdmin] = useState<MensajesPorCuota>(() => loadMensajes(docenteId));
+
+  useEffect(() => {
+    setNotasAdmin(loadMensajes(docenteId));
+    return subscribeMensajes(docenteId, setNotasAdmin);
+  }, [docenteId]);
+
+  // Mapa boletaId → mensaje (cuando la cuota tiene boleta vinculada)
+  const notaPorBoleta = useMemo(() => {
+    const map: Record<number, { cuotaId: number; mes: string; mensaje: string }> = {};
+    cuotasDelDocente.forEach(cuota => {
+      const mensaje = notasAdmin[cuota.id];
+      if (mensaje && cuota.boletaId) {
+        map[cuota.boletaId] = { cuotaId: cuota.id, mes: cuota.mes, mensaje };
+      }
+    });
+    return map;
+  }, [notasAdmin, cuotasDelDocente]);
+
+  // Notas para cuotas que aún no tienen boleta subida (no se pierden)
+  const notasPendientes = useMemo(() => {
+    return cuotasDelDocente
+      .filter(cuota => notasAdmin[cuota.id] && !cuota.boletaId)
+      .map(cuota => ({
+        cuotaId: cuota.id,
+        mes: cuota.mes,
+        mensaje: notasAdmin[cuota.id]
+      }));
+  }, [notasAdmin, cuotasDelDocente]);
 
   // Form state
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
@@ -331,6 +367,35 @@ export function DocenteBoletas() {
         </CardContent>
       </Card>
 
+      {/* Notas del Administrador para cuotas sin boleta subida (solo lectura) */}
+      {notasPendientes.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-amber-600" />
+              Notas pendientes del Administrador
+            </CardTitle>
+            <CardDescription>
+              Observaciones para cuotas que aún no tienen boleta subida.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {notasPendientes.map((nota) => (
+              <div
+                key={nota.cuotaId}
+                className="flex items-start gap-3 rounded bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div className="flex-1">
+                  <div className="font-semibold">{nota.mes}</div>
+                  <p className="mt-1 whitespace-pre-wrap">{nota.mensaje}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Resumen */}
       <Card>
         <CardHeader className="pb-3">
@@ -374,44 +439,64 @@ export function DocenteBoletas() {
               </p>
             </div>
           ) : (
-            boletas.map((boleta) => (
-              <div
-                key={boleta.id}
-                className="flex items-center gap-4 rounded-lg border p-4 hover:bg-gray-50"
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                  <FileText className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{boleta.nombre}</h4>
-                    {renderEstadoBadge(boleta)}
+            boletas.map((boleta) => {
+              const nota = notaPorBoleta[boleta.id];
+              return (
+                <div
+                  key={boleta.id}
+                  className="rounded-lg border p-4 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                      <FileText className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{boleta.nombre}</h4>
+                        {renderEstadoBadge(boleta)}
+                        {nota && (
+                          <Badge variant="outline" className="gap-1 border-blue-500 text-blue-700">
+                            <MessageSquare className="h-3 w-3" />
+                            Nota del admin
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {boleta.archivo}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Subido el {boleta.fecha}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline">
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteBoleta(boleta.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {boleta.archivo}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Subido el {boleta.fecha}
-                  </p>
+                  {nota && (
+                    <div className="mt-3 flex items-start gap-3 rounded bg-blue-50 p-3 text-sm text-blue-800">
+                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                      <div className="flex-1">
+                        <div className="font-semibold">Nota del administrador — {nota.mes}</div>
+                        <p className="mt-1 whitespace-pre-wrap">{nota.mensaje}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline">
-                    <Eye className="h-4 w-4 mr-1" />
-                    Ver
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteBoleta(boleta.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
