@@ -102,6 +102,9 @@ Archivos en `src/app/pages/admin/` que el usuario aún no expone:
 | 3 | 2026-05-25 | Académico → Gestión Académica (tabla y alertas) | "Notas al Día" deja de ser ✓/✗. Modelo cambia a `notasIngresadas`/`notasTotales` (alineado a `cursos.notas_ingresadas`/`notas_curso` de la BD). UI: badge **"X / Y"** con color (verde=completo, naranja=parcial, rojo=ninguna) + porcentaje. | ✅ |
 | 4 | 2026-05-25 | Admin → Base de datos (pestañas) | Renombrar pestaña **"Capa 1: Maestro Docentes" → "Capa 1: Docentes"**. | ✅ |
 | 5 | 2026-05-25 | Admin → Capa 1: Docentes | Nueva acción **"Editar ramos"** (ícono libro): dialog con secciones asignadas (quitar) y disponibles (asignar). Refresca la columna **Ramos Asignados**. | ✅ |
+| 6 | 2026-05-26 | Admin → Capa 3: Propuestas Semestrales | **Recálculo automático**: el listado se genera con `useMemo` recorriendo `mockSeccionesAsignaturas` + `calcularPropuestaSemestral`. Valor total manual por docente persistido en `localStorage` (`valores_propuesta_manual`). Totales y `Valor Hora` se actualizan en vivo. | ✅ |
+| 7 | 2026-05-26 | Admin → Detalle de Propuesta (botón 👁️) | Nueva tarjeta **"Ramos Asignados"** (Asignatura, Sigla, Sección, Hrs P/M/A, Total) antes de Distribución de Horas PMA. Dialog con scroll vertical (`max-h-[90vh]` + body scroll) y tablas con `overflow-x-auto`. | ✅ |
+| 8 | 2026-05-26 | Admin ↔ Docente → Notas por cuota | **Mensajes del admin sincronizados a boletas del docente**. Centralizado en `src/app/data/mensajesAdmin.ts` (storage `mensajes_propuesta_${docenteId}`, keyed por `cuotaId` real de `mockCuotasMensuales`). Admin escribe nota desde "Detalle de Cuotas"; el docente la ve **inline bajo su boleta** correspondiente, o en card "Notas pendientes" si aún no subió la boleta. Sincronización en vivo via `StorageEvent` + custom event `mensajes-admin:update`. | ✅ |
 
 ---
 
@@ -112,6 +115,7 @@ Archivos en `src/app/pages/admin/` que el usuario aún no expone:
 - [ ] Confirmar tarifas por nivel docente (A/B/C).
 - [ ] Diseñar backend **NestJS** (REST + DTOs) cuando llegue la BD.
   - Crear `src/app/data/api.ts` con funciones tipadas que devuelvan los mismos shapes del mock.
+  - Reemplazar `src/app/data/mensajesAdmin.ts` (`load/save/setMensajeCuota`) por llamadas REST manteniendo la misma firma. Las notas mapean 1:1 a la futura columna `pagos.observaciones` (o tabla `mensajes_cuota`) keyed por `cuotaId`.
   - Mapeo BD → frontend: `rut_docente`→`rut`, `nivel_docente`→`nivelDocente`, `valor_propuesta`→`montoTotalPropuesta`, `notas_ingresadas`/`notas_curso`→`notasIngresadas`/`notasTotales`.
   - Estados derivados (`boletasEstado`, `valorCuotaBruto`, `saldo`) los calcula backend o frontend.
   - Pedir al cliente agregar `rut_docente` a `grupos` si quieren docente-por-sección (hoy en BD está solo en `cursos`).
