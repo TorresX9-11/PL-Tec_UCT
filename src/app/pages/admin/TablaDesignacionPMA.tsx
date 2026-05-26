@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react';
-import { Search, ChevronDown, ChevronRight, UserPlus, Edit } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown } from 'lucide-react';
 import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, mockDocentesMaestros, type SeccionAsignatura } from '../../data/mockData';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -8,7 +8,17 @@ import { Badge } from '../../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '../../components/ui/command';
 import { Label } from '../../components/ui/label';
+import { cn } from '../../components/ui/utils';
 import { toast } from 'sonner';
 
 export function TablaDesignacionPMA() {
@@ -58,11 +68,34 @@ export function TablaDesignacionPMA() {
     setOpenDialog(true);
   };
 
+  // Para asignaturas que aún no tienen ninguna sección registrada:
+  // creamos una sección "borrador" en memoria (id = -1) y la pasamos al dialog.
+  // Si el admin guarda, `handleUpdateSeccion` detecta el id negativo y la inserta como nueva.
+  const handleCrearPrimeraSeccion = (asignaturaId: number) => {
+    setEditingSeccion({
+      id: -1,
+      asignaturaId,
+      seccion: 1,
+      docenteId: undefined,
+      horasP: 0,
+      horasM: 0,
+      horasA: 0
+    });
+    setOpenDialog(true);
+  };
+
   const handleUpdateSeccion = (updatedSeccion: SeccionAsignatura) => {
-    setSecciones(secciones.map(s => s.id === updatedSeccion.id ? updatedSeccion : s));
+    if (updatedSeccion.id < 0) {
+      // Nueva sección: asignar id real y agregar al listado
+      const nuevoId = secciones.length > 0 ? Math.max(...secciones.map(s => s.id)) + 1 : 1;
+      setSecciones([...secciones, { ...updatedSeccion, id: nuevoId }]);
+      toast.success('Sección creada y docente asignado');
+    } else {
+      setSecciones(secciones.map(s => s.id === updatedSeccion.id ? updatedSeccion : s));
+      toast.success('Asignación actualizada exitosamente');
+    }
     setEditingSeccion(null);
     setOpenDialog(false);
-    toast.success('Asignación actualizada exitosamente');
   };
 
   // Count stats
@@ -255,15 +288,24 @@ export function TablaDesignacionPMA() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {primeraSeccion && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleAsignarDocente(primeraSeccion)}
-                            >
-                              {docente ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title={
+                              !primeraSeccion
+                                ? 'Crear sección y asignar docente'
+                                : docente
+                                  ? 'Editar asignación'
+                                  : 'Asignar docente'
+                            }
+                            onClick={() =>
+                              primeraSeccion
+                                ? handleAsignarDocente(primeraSeccion)
+                                : handleCrearPrimeraSeccion(asignatura.id)
+                            }
+                          >
+                            {docente ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                          </Button>
                         </TableCell>
                       </TableRow>
 
@@ -382,29 +424,89 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
     onSave(formData);
   };
 
+  const [comboOpen, setComboOpen] = useState(false);
+  const docenteSeleccionado = mockDocentesMaestros.find(d => d.id === formData.docenteId);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="docenteId">Docente</Label>
-        <Select
-          value={formData.docenteId?.toString() || 'sin-asignar'}
-          onValueChange={(value) => setFormData({
-            ...formData,
-            docenteId: value === 'sin-asignar' ? undefined : Number(value)
-          })}
-        >
-          <SelectTrigger id="docenteId">
-            <SelectValue placeholder="Seleccione un docente" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="sin-asignar">Sin asignar</SelectItem>
-            {mockDocentesMaestros.map((docente) => (
-              <SelectItem key={docente.id} value={docente.id.toString()}>
-                {docente.nombreCompleto} ({docente.rut}-{docente.dv}) {docente.nivelDocente ? `- Nivel ${docente.nivelDocente}` : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={comboOpen} onOpenChange={setComboOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              id="docenteId"
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={comboOpen}
+              className={cn(
+                'w-full justify-between font-normal',
+                !docenteSeleccionado && 'text-muted-foreground'
+              )}
+            >
+              {docenteSeleccionado
+                ? `${docenteSeleccionado.nombreCompleto} (${docenteSeleccionado.rut}-${docenteSeleccionado.dv})${docenteSeleccionado.nivelDocente ? ` - Nivel ${docenteSeleccionado.nivelDocente}` : ''}`
+                : 'Seleccione un docente o escriba para filtrar...'}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command
+              filter={(value: string, search: string) =>
+                value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+              }
+            >
+              <CommandInput placeholder="Buscar por nombre o RUT..." />
+              <CommandList>
+                <CommandEmpty>No se encontraron docentes.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="sin asignar"
+                    onSelect={() => {
+                      setFormData({ ...formData, docenteId: undefined });
+                      setComboOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        !formData.docenteId ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    Sin asignar
+                  </CommandItem>
+                  {mockDocentesMaestros.map((docente) => {
+                    const label = `${docente.nombreCompleto} ${docente.rut}-${docente.dv}${docente.nivelDocente ? ` Nivel ${docente.nivelDocente}` : ''}`;
+                    return (
+                      <CommandItem
+                        key={docente.id}
+                        value={label}
+                        onSelect={() => {
+                          setFormData({ ...formData, docenteId: docente.id });
+                          setComboOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            formData.docenteId === docente.id ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                        <div className="flex flex-col">
+                          <span>{docente.nombreCompleto}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {docente.rut}-{docente.dv}
+                            {docente.nivelDocente ? ` · Nivel ${docente.nivelDocente}` : ' · Sin nivel'}
+                          </span>
+                        </div>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
