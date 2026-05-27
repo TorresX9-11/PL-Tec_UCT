@@ -335,6 +335,12 @@ export interface SeccionAsignatura {
   horasP: number;
   horasM: number;
   horasA: number;
+  // Validaciones académicas POR RAMO (fuente de verdad — el coordinador valida cada ramo)
+  // Los campos equivalentes en DocenteAcademico quedan como agregados derivados/legacy.
+  contenidoBlackboard?: EstadoValidacion;
+  notasIngresadas?: number;   // refleja `cursos.notas_ingresadas` en BD
+  notasTotales?: number;      // refleja `cursos.notas_curso` en BD
+  guiaAprendizaje?: EstadoValidacion;
 }
 
 // Mock Data - Carreras
@@ -387,27 +393,36 @@ export const mockAsignaturas: Asignatura[] = [
 // Mock Data - Secciones de Asignaturas con Docentes Asignados
 export const mockSeccionesAsignaturas: SeccionAsignatura[] = [
   // INF-101 (Programación I) - 2 secciones
-  { id: 1, asignaturaId: 1, seccion: 1, docenteId: 1, horasP: 60, horasM: 20, horasA: 10 },
-  { id: 2, asignaturaId: 1, seccion: 2, docenteId: 3, horasP: 60, horasM: 20, horasA: 10 },
+  { id: 1, asignaturaId: 1, seccion: 1, docenteId: 1, horasP: 60, horasM: 20, horasA: 10,
+    contenidoBlackboard: 'Validado', notasIngresadas: 2, notasTotales: 2, guiaAprendizaje: 'Validado' },
+  { id: 2, asignaturaId: 1, seccion: 2, docenteId: 3, horasP: 60, horasM: 20, horasA: 10,
+    contenidoBlackboard: 'Inexistente', notasIngresadas: 3, notasTotales: 3, guiaAprendizaje: 'Inexistente' },
 
   // INF-201 (POO) - 1 sección
-  { id: 3, asignaturaId: 2, seccion: 1, docenteId: 1, horasP: 50, horasM: 15, horasA: 5 },
+  { id: 3, asignaturaId: 2, seccion: 1, docenteId: 1, horasP: 50, horasM: 15, horasA: 5,
+    contenidoBlackboard: 'Validado', notasIngresadas: 1, notasTotales: 1, guiaAprendizaje: 'Validado' },
 
   // INF-302 (BD) - 1 sección
-  { id: 4, asignaturaId: 3, seccion: 1, docenteId: 1, horasP: 45, horasM: 15, horasA: 10 },
+  { id: 4, asignaturaId: 3, seccion: 1, docenteId: 1, horasP: 45, horasM: 15, horasA: 10,
+    contenidoBlackboard: 'Validado', notasIngresadas: 1, notasTotales: 1, guiaAprendizaje: 'Validado' },
 
   // ADM-101 (Contabilidad) - 3 grupos
-  { id: 5, asignaturaId: 6, seccion: 1, docenteId: 2, horasP: 40, horasM: 20, horasA: 10 },
-  { id: 6, asignaturaId: 6, seccion: 2, docenteId: 6, horasP: 40, horasM: 20, horasA: 10 },
+  { id: 5, asignaturaId: 6, seccion: 1, docenteId: 2, horasP: 40, horasM: 20, horasA: 10,
+    contenidoBlackboard: 'Validado', notasIngresadas: 1, notasTotales: 2, guiaAprendizaje: 'Por Revisar' },
+  { id: 6, asignaturaId: 6, seccion: 2, docenteId: 6, horasP: 40, horasM: 20, horasA: 10,
+    contenidoBlackboard: 'Por Revisar', notasIngresadas: 0, notasTotales: 2, guiaAprendizaje: 'Inexistente' },
   { id: 7, asignaturaId: 6, seccion: 3, docenteId: undefined, horasP: 40, horasM: 20, horasA: 10 }, // Sin asignar
 
   // ADM-301 (Marketing) - 2 grupos
-  { id: 8, asignaturaId: 8, seccion: 1, docenteId: 2, horasP: 35, horasM: 15, horasA: 10 },
+  { id: 8, asignaturaId: 8, seccion: 1, docenteId: 2, horasP: 35, horasM: 15, horasA: 10,
+    contenidoBlackboard: 'Por Revisar', notasIngresadas: 1, notasTotales: 2, guiaAprendizaje: 'Por Revisar' },
   { id: 9, asignaturaId: 8, seccion: 2, docenteId: undefined, horasP: 35, horasM: 15, horasA: 10 }, // Sin asignar
 
-  // EDU-201 (Didáctica) - 2 secciones
-  { id: 10, asignaturaId: 14, seccion: 1, docenteId: 4, horasP: 60, horasM: 15, horasA: 10 },
-  { id: 11, asignaturaId: 14, seccion: 2, docenteId: 4, horasP: 60, horasM: 15, horasA: 10 }
+  // EDU-201 (Didáctica) - 2 secciones (ambas Ana)
+  { id: 10, asignaturaId: 14, seccion: 1, docenteId: 4, horasP: 60, horasM: 15, horasA: 10,
+    contenidoBlackboard: 'Validado', notasIngresadas: 2, notasTotales: 2, guiaAprendizaje: 'Validado' },
+  { id: 11, asignaturaId: 14, seccion: 2, docenteId: 4, horasP: 60, horasM: 15, horasA: 10,
+    contenidoBlackboard: 'Validado', notasIngresadas: 2, notasTotales: 2, guiaAprendizaje: 'Por Revisar' }
 ];
 
 // ================================

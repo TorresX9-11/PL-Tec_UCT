@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Search, Eye, User, FileText, Award, Shield, Receipt } from 'lucide-react';
-import { mockDocentesAcademicos } from '../../data/mockData';
+import { Search, Eye, User, FileText, Award, Shield, Receipt, BookOpen } from 'lucide-react';
+import { mockDocentesAcademicos, getRamosDocente } from '../../data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -119,6 +119,7 @@ export function PlataformaDocentes() {
                   <TableHead>Docente</TableHead>
                   <TableHead>RUT</TableHead>
                   <TableHead>Correo</TableHead>
+                  <TableHead>Ramos Asignados</TableHead>
                   <TableHead className="text-center">CV</TableHead>
                   <TableHead className="text-center">Certificados</TableHead>
                   <TableHead className="text-center">Capacitaciones</TableHead>
@@ -132,11 +133,30 @@ export function PlataformaDocentes() {
                     docente.certificadoAntecedentes &&
                     docente.certificadoInhabilidad;
 
+                  const ramos = getRamosDocente(docente.id);
+
                   return (
                     <TableRow key={docente.id}>
                       <TableCell className="font-medium">{docente.nombreCompleto}</TableCell>
                       <TableCell className="font-mono text-sm">{docente.rut}</TableCell>
                       <TableCell className="text-sm">{docente.correo}</TableCell>
+                      <TableCell>
+                        {ramos.length === 0 ? (
+                          <span className="text-xs italic text-gray-400">Sin ramos asignados</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {ramos.map(({ seccion, asignatura }) => (
+                              <li key={seccion.id} className="flex items-start gap-1.5 text-xs">
+                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-green-600" />
+                                <span>
+                                  <span className="font-mono font-medium">{asignatura?.sigla ?? '—'}</span>
+                                  <span className="ml-1 text-gray-500">· Sec {seccion.seccion}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         {docente.cvActualizado ? (
                           <Badge variant="default" className="text-xs">Al día</Badge>
