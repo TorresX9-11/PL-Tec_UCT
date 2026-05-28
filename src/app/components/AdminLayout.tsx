@@ -83,6 +83,16 @@ export function AdminLayout() {
             >
               Reportes
             </Link>
+            <Link
+              to="/admin/correos-masivos"
+              className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                isActive('/admin/correos-masivos')
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Correos Masivos
+            </Link>
           </div>
         </div>
       </nav>

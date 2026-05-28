@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Users, FileText, DollarSign, TrendingUp, AlertCircle, Inbox } from 'lucide-react';
+import { Users, FileText, DollarSign, TrendingUp, AlertCircle, Inbox, Mail } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
@@ -141,7 +141,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Quick Access — solo destinos reales */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Link to="/admin/docentes">
           <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
             <CardHeader>
@@ -185,6 +185,27 @@ export function AdminDashboard() {
                   {totalAlertas} pendiente{totalAlertas === 1 ? '' : 's'}
                 </Badge>
               )}
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/admin/correos-masivos">
+          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-green-100 p-3">
+                  <Mail className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <CardTitle>Correos Masivos</CardTitle>
+                  <CardDescription>Comunicaciones a docentes</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                Recordatorios, avisos de observación y confirmaciones de pago con plantillas y selección por grupo.
+              </p>
             </CardContent>
           </Card>
         </Link>
