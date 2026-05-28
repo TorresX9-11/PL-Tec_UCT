@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Mail, Pencil, MessageSquare } from 'lucide-react';
+import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, MessageSquare } from 'lucide-react';
 import {
   mockPropuestasSemestrales,
   mockDocentesMaestros,
@@ -290,10 +290,6 @@ export function TablaPropuestasSemestrales() {
                 <SelectItem value="Todas OK">Todas OK</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Mail className="mr-2 h-4 w-4" />
-              Correo Masivo
-            </Button>
           </div>
         </CardContent>
       </Card>

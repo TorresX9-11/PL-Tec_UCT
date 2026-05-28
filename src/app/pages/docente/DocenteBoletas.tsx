@@ -26,6 +26,8 @@ import {
   subscribeMensajes,
   type MensajesPorCuota
 } from '../../data/mensajesAdmin';
+import { subscribePagosAdmin } from '../../data/pagosAdmin';
+import { useLocation } from 'react-router';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -59,6 +61,29 @@ export function DocenteBoletas() {
     setNotasAdmin(loadMensajes(docenteId));
     return subscribeMensajes(docenteId, setNotasAdmin);
   }, [docenteId]);
+
+  // Refresco en vivo cuando el admin de pagos cambia el estado de una boleta
+  // o registra/revierte el pago de una cuota.
+  useEffect(() => subscribePagosAdmin(bump), []);
+
+  // Deep-link via hash: cuando se llega con #cuota-{id} (p.ej. desde el toast de
+  // notificación del DocenteLayout), scrollear al elemento y aplicar un highlight
+  // temporal para que el docente identifique de inmediato la cuota referenciada.
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.hash || !location.hash.startsWith('#cuota-')) return;
+    // Esperamos un tick para asegurar que las cards se hayan montado.
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(location.hash.slice(1));
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2', 'transition-all');
+      window.setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'transition-all');
+      }, 2500);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [location.hash, notasAdmin, boletas]);
 
   // Mapa boletaId → mensaje (cuando la cuota tiene boleta vinculada)
   const notaPorBoleta = useMemo(() => {
@@ -383,6 +408,7 @@ export function DocenteBoletas() {
             {notasPendientes.map((nota) => (
               <div
                 key={nota.cuotaId}
+                id={`cuota-${nota.cuotaId}`}
                 className="flex items-start gap-3 rounded bg-amber-50 p-3 text-sm text-amber-900"
               >
                 <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
@@ -444,6 +470,7 @@ export function DocenteBoletas() {
               return (
                 <div
                   key={boleta.id}
+                  id={nota ? `cuota-${nota.cuotaId}` : undefined}
                   className="rounded-lg border p-4 hover:bg-gray-50"
                 >
                   <div className="flex items-center gap-4">

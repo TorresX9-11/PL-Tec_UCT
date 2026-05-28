@@ -486,6 +486,8 @@ export interface CuotaMensual {
   montoBruto: number;
   estadoPago: 'Pendiente' | 'Pagada';
   fechaPago?: string;
+  /** Referencia de la transferencia bancaria cuando la cuota se marca como pagada. */
+  referenciaPago?: string;
   boletaId?: number;
   boletaEstado?: 'Inexistente' | 'Subida' | 'Procesada' | 'Con Observación';
   observaciones?: string;
@@ -808,4 +810,49 @@ export function getMesesCuotas(
   const meses = ['Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   if (jornada === 'Vespertina') meses.push('Enero');
   return meses.map(m => `${m} ${año}`);
+}
+
+/** Busca una boleta por id recorriendo todas las boletas de todos los docentes académicos. */
+export function getBoletaById(boletaId: number): { boleta: Boleta; docenteId: number } | undefined {
+  for (const doc of mockDocentesAcademicos) {
+    const boleta = doc.boletas.find(b => b.id === boletaId);
+    if (boleta) return { boleta, docenteId: doc.id };
+  }
+  return undefined;
+}
+
+/**
+ * Devuelve TODAS las cuotas del semestre activo enriquecidas con datos del
+ * docente y de la boleta vinculada (si existe). Pensado para la "Bandeja de
+ * Boletas" del admin de pagos: una sola tabla con todo el contexto.
+ */
+export interface CuotaConContexto {
+  cuota: CuotaMensual;
+  docente: DocenteMaestro;
+  boleta?: Boleta;
+  propuesta: PropuestaSemestral;
+}
+
+export function getCuotasAdmin(
+  semestre: number = 1,
+  año: number = 2026
+): CuotaConContexto[] {
+  const propuestasPorId = new Map<number, PropuestaSemestral>(
+    mockPropuestasSemestrales.map(p => [p.id, p])
+  );
+  const docentesPorId = new Map<number, DocenteMaestro>(
+    mockDocentesMaestros.map(d => [d.id, d])
+  );
+
+  const out: CuotaConContexto[] = [];
+  for (const cuota of mockCuotasMensuales) {
+    const propuesta = propuestasPorId.get(cuota.propuestaId);
+    if (!propuesta) continue;
+    if (propuesta.semestre !== semestre || propuesta.año !== año) continue;
+    const docente = docentesPorId.get(propuesta.docenteId);
+    if (!docente) continue;
+    const boleta = cuota.boletaId ? getBoletaById(cuota.boletaId)?.boleta : undefined;
+    out.push({ cuota, docente, boleta, propuesta });
+  }
+  return out;
 }

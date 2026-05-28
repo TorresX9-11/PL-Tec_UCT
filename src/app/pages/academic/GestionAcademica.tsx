@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
-import { CheckCircle, AlertCircle, BookOpen, User, FileCheck, ArrowRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CheckCircle, AlertCircle, BookOpen, User, FileCheck, ArrowRight, Search, FilterX } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import {
   mockDocentesAcademicos,
   mockSeccionesAsignaturas,
+  mockAsignaturas,
+  mockCarreras,
   getRamosDocente,
   type EstadoValidacion,
   type DocenteAcademico
@@ -11,6 +13,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import {
   Accordion,
   AccordionContent,
@@ -87,6 +91,69 @@ export function GestionAcademica() {
   const irValidarPersonales = (docenteId: number) =>
     navigate(`/academico/validar-docente/${docenteId}?tipo=personal`);
 
+  // ─── Filtros ───────────────────────────────────────────────────────────────
+  const [searchTerm, setSearchTerm] = useState('');
+  const [carreraId, setCarreraId] = useState<string>('all'); // 'all' | id
+  const [asignaturaId, setAsignaturaId] = useState<string>('all');
+
+  // Opciones de selects: solo carreras/asignaturas con al menos un docente asignado
+  const carrerasOptions = useMemo(() => {
+    const ids = new Set<number>();
+    mockSeccionesAsignaturas.forEach(s => {
+      if (s.docenteId) {
+        const a = mockAsignaturas.find(x => x.id === s.asignaturaId);
+        if (a) ids.add(a.carreraId);
+      }
+    });
+    return mockCarreras.filter(c => ids.has(c.id));
+  }, []);
+
+  const asignaturasOptions = useMemo(() => {
+    // Si hay carrera seleccionada, restringir asignaturas a esa carrera
+    const carreraNum = carreraId === 'all' ? null : Number(carreraId);
+    const ids = new Set<number>();
+    mockSeccionesAsignaturas.forEach(s => {
+      if (!s.docenteId) return;
+      const a = mockAsignaturas.find(x => x.id === s.asignaturaId);
+      if (!a) return;
+      if (carreraNum !== null && a.carreraId !== carreraNum) return;
+      ids.add(a.id);
+    });
+    return mockAsignaturas.filter(a => ids.has(a.id));
+  }, [carreraId]);
+
+  // Listado filtrado (AND de los 3 criterios)
+  const filteredDocentes = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    const carreraNum = carreraId === 'all' ? null : Number(carreraId);
+    const asignaturaNum = asignaturaId === 'all' ? null : Number(asignaturaId);
+
+    return docentes.filter(d => {
+      // Búsqueda por nombre o RUT
+      if (search) {
+        const nombre = d.nombreCompleto.toLowerCase();
+        const rut = d.rut.toLowerCase();
+        if (!nombre.includes(search) && !rut.includes(search)) return false;
+      }
+      // Filtros por carrera/asignatura: requieren ramos del docente
+      if (carreraNum !== null || asignaturaNum !== null) {
+        const ramos = getRamosDocente(d.id);
+        if (ramos.length === 0) return false;
+        const matches = ramos.some(({ asignatura }) => {
+          if (!asignatura) return false;
+          if (asignaturaNum !== null && asignatura.id !== asignaturaNum) return false;
+          if (carreraNum !== null && asignatura.carreraId !== carreraNum) return false;
+          return true;
+        });
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [docentes, searchTerm, carreraId, asignaturaId]);
+
+  const filtrosActivos = searchTerm.trim() !== '' || carreraId !== 'all' || asignaturaId !== 'all';
+  const limpiarFiltros = () => { setSearchTerm(''); setCarreraId('all'); setAsignaturaId('all'); };
+
   return (
     <div className="space-y-6">
       <div>
@@ -147,15 +214,102 @@ export function GestionAcademica() {
 
       {/* Reporte por Docente */}
       <Card>
-        <CardHeader>
-          <CardTitle>Reporte por Docente</CardTitle>
-          <CardDescription>
-            Validación académica <strong>por ramo</strong> y personal <strong>por docente</strong>.
-            Use el botón correspondiente para acceder a la pantalla de validación.
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <CardTitle>Reporte por Docente</CardTitle>
+              <CardDescription>
+                Presione un docente para desplegar sus ramos y archivos.
+                Validación académica <strong>por ramo</strong> y personal <strong>por docente</strong>.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {filteredDocentes.length} de {docentes.length} docentes
+            </Badge>
+          </div>
+
+          {/* Barra de filtros */}
+          <div className="grid gap-3 md:grid-cols-12">
+            <div className="md:col-span-5 relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Buscar por nombre o RUT..."
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="md:col-span-3">
+              <Select
+                value={carreraId}
+                onValueChange={(v: string) => {
+                  setCarreraId(v);
+                  // Si cambia carrera, resetear asignatura para evitar combinación inválida
+                  setAsignaturaId('all');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las carreras" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las carreras</SelectItem>
+                  {carrerasOptions.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.codigo} — {c.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-3">
+              <Select
+                value={asignaturaId}
+                onValueChange={(v: string) => setAsignaturaId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las asignaturas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las asignaturas</SelectItem>
+                  {asignaturasOptions.map(a => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      <span className="font-mono">{a.sigla}</span> · {a.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-1 flex">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={limpiarFiltros}
+                disabled={!filtrosActivos}
+                className="w-full"
+                title="Limpiar filtros"
+              >
+                <FilterX className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {docentes.map(docente => {
+        <CardContent>
+          {filteredDocentes.length === 0 ? (
+            <div className="py-12 text-center">
+              <Search className="mx-auto h-10 w-10 text-gray-300" />
+              <p className="mt-3 text-sm text-gray-600">
+                Ningún docente coincide con los filtros aplicados.
+              </p>
+              {filtrosActivos && (
+                <Button variant="outline" size="sm" className="mt-4" onClick={limpiarFiltros}>
+                  <FilterX className="mr-2 h-4 w-4" />
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+          ) : (
+          <Accordion type="multiple" className="w-full space-y-3">
+          {filteredDocentes.map(docente => {
             const ramos = getRamosDocente(docente.id);
             const personales = docsPersonales(docente);
             const personalesCompletos = personales.every(p => p.estado === 'Validado');
@@ -168,39 +322,47 @@ export function GestionAcademica() {
             const todoCompleto = personalesCompletos && academicosCompletos && ramos.length > 0;
 
             return (
-              <div key={docente.id} className="rounded-lg border bg-white">
-                {/* Header del docente */}
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-gray-50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                      <User className="h-5 w-5 text-green-600" />
+              <AccordionItem
+                key={docente.id}
+                value={`docente-${docente.id}`}
+                className="rounded-lg border bg-white overflow-hidden"
+              >
+                {/* Trigger del docente (vista colapsada) */}
+                <AccordionTrigger className="px-4 py-3 hover:bg-gray-50 hover:no-underline data-[state=open]:bg-gray-50 data-[state=open]:border-b">
+                  <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-3">
+                    <div className="flex items-center gap-3 text-left">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100">
+                        <User className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm">{docente.nombreCompleto}</h3>
+                        <p className="text-xs text-gray-500 font-normal">
+                          <span className="font-mono">{docente.rut}</span>
+                          <span className="mx-1.5">·</span>
+                          {ramos.length === 0
+                            ? 'Sin ramos asignados'
+                            : `${ramos.length} ${ramos.length === 1 ? 'ramo' : 'ramos'}`}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{docente.nombreCompleto}</h3>
-                      <p className="text-xs text-gray-500">
-                        <span className="font-mono">{docente.rut}</span>
-                        <span className="mx-1.5">·</span>
-                        {ramos.length === 0
-                          ? 'Sin ramos asignados'
-                          : `${ramos.length} ${ramos.length === 1 ? 'ramo' : 'ramos'} asignado${ramos.length === 1 ? '' : 's'}`}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      {todoCompleto ? (
+                        <Badge variant="default" className="gap-1 bg-green-600 text-xs">
+                          <CheckCircle className="h-3 w-3" /> Completo
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="gap-1 text-xs">
+                          <AlertCircle className="h-3 w-3" /> Pendiente
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {todoCompleto ? (
-                      <Badge variant="default" className="gap-1 bg-green-600">
-                        <CheckCircle className="h-3 w-3" /> Cumplimiento completo
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive" className="gap-1">
-                        <AlertCircle className="h-3 w-3" /> Pendiente
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                </AccordionTrigger>
 
-                {/* Académicos por ramo */}
-                <div className="border-b p-4">
+                {/* Contenido expandido: académicos + personales */}
+                <AccordionContent className="pb-0">
+                  {/* Académicos por ramo */}
+                  <div className="border-b p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-green-600" />
                     <h4 className="text-sm font-semibold">Archivos Académicos (por ramo)</h4>
@@ -298,9 +460,12 @@ export function GestionAcademica() {
                     ))}
                   </div>
                 </div>
-              </div>
+                </AccordionContent>
+              </AccordionItem>
             );
           })}
+          </Accordion>
+          )}
         </CardContent>
       </Card>
     </div>

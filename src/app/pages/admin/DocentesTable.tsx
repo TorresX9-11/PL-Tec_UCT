@@ -2,13 +2,32 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { TablaDocentesMaestros } from './TablaDocentesMaestros';
 import { TablaDesignacionPMA } from './TablaDesignacionPMA';
 import { TablaPropuestasSemestrales } from './TablaPropuestasSemestrales';
-import { Database, Users, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { BandejaBoletas } from './BandejaBoletas';
+import { Database, Users, FileSpreadsheet, Trash2, Inbox } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
+
+const HASH_TO_TAB: Record<string, string> = {
+  '#bandeja': 'bandeja',
+  '#propuestas': 'propuestas',
+  '#designacion': 'designacion',
+  '#maestro': 'maestro'
+};
 
 export function DocentesTable() {
+  // Permite abrir directamente un sub-tab vía hash (ej: /admin/docentes#bandeja
+  // desde el AdminDashboard).
+  const location = useLocation();
+  const initialTab = HASH_TO_TAB[location.hash] ?? 'maestro';
+  const [tab, setTab] = useState<string>(initialTab);
+  useEffect(() => {
+    const next = HASH_TO_TAB[location.hash];
+    if (next) setTab(next);
+  }, [location.hash]);
+
   const handleDeleteAll = () => {
     const password = prompt('Ingrese la clave de seguridad para borrar la base de datos:');
     if (password === 'TEC2026') {
@@ -53,8 +72,8 @@ export function DocentesTable() {
       </Card>
 
       {/* Tabs System */}
-      <Tabs defaultValue="maestro" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="maestro" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Capa 1: Docentes
@@ -66,6 +85,10 @@ export function DocentesTable() {
           <TabsTrigger value="propuestas" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Capa 3: Propuestas
+          </TabsTrigger>
+          <TabsTrigger value="bandeja" className="flex items-center gap-2">
+            <Inbox className="h-4 w-4" />
+            Bandeja de Boletas
           </TabsTrigger>
         </TabsList>
 
@@ -79,6 +102,10 @@ export function DocentesTable() {
 
         <TabsContent value="propuestas">
           <TablaPropuestasSemestrales />
+        </TabsContent>
+
+        <TabsContent value="bandeja">
+          <BandejaBoletas />
         </TabsContent>
       </Tabs>
     </div>

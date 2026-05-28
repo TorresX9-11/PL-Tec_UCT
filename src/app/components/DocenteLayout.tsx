@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { loadMensajes } from '../data/mensajesAdmin';
+import { getCuotasDocente } from '../data/mockData';
 
 export function DocenteLayout() {
   const location = useLocation();
@@ -11,12 +14,61 @@ export function DocenteLayout() {
   };
 
   const handleLogout = () => {
+    // Limpiar flags de sesión
+    sessionStorage.removeItem('docente_check_mensajes');
     toast.success('Sesión cerrada');
     navigate('/academico/login');
   };
 
   // Obtener información del docente desde sessionStorage o contexto
   const docenteNombre = sessionStorage.getItem('docenteNombre') || 'Docente';
+
+  // ─── Notificación de mensajes pendientes del admin (solo tras login) ──────
+  useEffect(() => {
+    // Se consume la flag una sola vez. Si el docente refresca o navega entre
+    // páginas internas, no vuelve a aparecer (sólo aparece justo después del login).
+    if (sessionStorage.getItem('docente_check_mensajes') !== '1') return;
+    sessionStorage.removeItem('docente_check_mensajes');
+
+    const docenteIdRaw = sessionStorage.getItem('docenteId');
+    if (!docenteIdRaw) return;
+    const docenteId = Number(docenteIdRaw);
+
+    const mensajes = loadMensajes(docenteId);
+    const cuotaIds = Object.keys(mensajes).map(Number);
+    if (cuotaIds.length === 0) return;
+
+    // Resolver mes/numero de cuota del primer mensaje (para la primera CTA)
+    const cuotas = getCuotasDocente(docenteId);
+    const cuotasConMensaje = cuotas.filter(c => mensajes[c.id]);
+    if (cuotasConMensaje.length === 0) return;
+
+    const primera = cuotasConMensaje[0];
+    const total = cuotasConMensaje.length;
+
+    // Pequeño delay para que aparezca cuando ya está renderizada la dashboard
+    const timer = window.setTimeout(() => {
+      const titulo = total === 1
+        ? 'Tienes un mensaje del Administrador de Pagos'
+        : `Tienes ${total} mensajes del Administrador de Pagos`;
+      const descripcion = total === 1
+        ? `Ha dejado una observación en tu boleta de ${primera.mes}.`
+        : `Hay observaciones pendientes (la más reciente en ${primera.mes}).`;
+
+      toast.message(titulo, {
+        description: descripcion,
+        icon: <MessageSquare className="h-5 w-5 text-blue-600" />,
+        duration: 8000,
+        action: {
+          label: 'Ver mensaje',
+          onClick: () => navigate(`/docente/boletas#cuota-${primera.id}`)
+        }
+      });
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">

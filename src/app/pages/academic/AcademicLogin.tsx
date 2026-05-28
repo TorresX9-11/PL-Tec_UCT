@@ -37,6 +37,9 @@ export function AcademicLogin() {
           sessionStorage.setItem('docenteId', docente.id.toString());
           sessionStorage.setItem('docenteNombre', docente.nombreCompleto);
           sessionStorage.setItem('docenteRut', docente.rut);
+          // Flag consumida por DocenteLayout: muestra toast con mensajes pendientes
+          // del admin de pagos al primer render tras el login.
+          sessionStorage.setItem('docente_check_mensajes', '1');
           toast.success(`Bienvenido/a ${docente.nombreCompleto}`);
           navigate('/docente/dashboard');
         } else {

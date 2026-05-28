@@ -16,7 +16,6 @@ import { toast } from 'sonner';
 
 // ─── Definiciones de docs por contexto ───────────────────────────────────────
 type DocPersonalKey = 'cvActualizado' | 'certificadoTitulo' | 'certificadoAntecedentes' | 'certificadoInhabilidad' | 'carnetIdentidad';
-type DocAcademicoKey = 'contenidoBlackboard' | 'notasAlDia' | 'guiaAprendizaje';
 
 interface DocItem {
   key: string;
@@ -31,12 +30,6 @@ const PERSONALES_DEF: { key: DocPersonalKey; nombre: string; archivo: string }[]
   { key: 'certificadoAntecedentes', nombre: 'Certificado de Antecedentes', archivo: 'certificado_antecedentes.pdf' },
   { key: 'certificadoInhabilidad', nombre: 'Certificado de Inhabilidad', archivo: 'certificado_inhabilidad.pdf' },
   { key: 'carnetIdentidad', nombre: 'Carnet de Identidad', archivo: 'carnet_identidad.pdf' }
-];
-
-const ACADEMICOS_DEF: { key: DocAcademicoKey; nombre: string; archivo: string }[] = [
-  { key: 'contenidoBlackboard', nombre: 'Contenido en Blackboard', archivo: 'contenido_blackboard.pdf' },
-  { key: 'notasAlDia', nombre: 'Notas al Día', archivo: 'notas_curso.xlsx' },
-  { key: 'guiaAprendizaje', nombre: 'Guía de Aprendizaje', archivo: 'guia_aprendizaje.pdf' }
 ];
 
 // ─── Helper: badge de estado ─────────────────────────────────────────────────
@@ -250,7 +243,7 @@ export function ValidarDocente() {
                         <Label htmlFor={`estado-${doc.key}`}>Estado de Validación</Label>
                         <Select
                           value={estados[doc.key] ?? doc.estado}
-                          onValueChange={(value) => setEstados(prev => ({ ...prev, [doc.key]: value as EstadoValidacion }))}
+                          onValueChange={(value: string) => setEstados((prev: Record<string, EstadoValidacion>) => ({ ...prev, [doc.key]: value as EstadoValidacion }))}
                           disabled={isNotasAlDia} // las notas no se "validan", se calculan
                         >
                           <SelectTrigger id={`estado-${doc.key}`}>

@@ -1,19 +1,81 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Users, FileText, Mail, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
+import { Users, FileText, DollarSign, TrendingUp, AlertCircle, Inbox } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { mockDocentes } from '../../data/mockData';
+import { Badge } from '../../components/ui/badge';
+import {
+  mockDocentesMaestros,
+  getCuotasAdmin,
+  type CuotaConContexto
+} from '../../data/mockData';
+import { subscribePagosAdmin } from '../../data/pagosAdmin';
 
 export function AdminDashboard() {
-  const totalDocentes = mockDocentes.length;
-  const docentesDiurnos = mockDocentes.filter(d => d.jornada === 'Diurna').length;
-  const docentesVespertinos = mockDocentes.filter(d => d.jornada === 'Vespertina').length;
-  const totalPropuestas = mockDocentes.reduce((sum, d) => sum + d.montoTotalPropuesta, 0);
-  const totalPagado = mockDocentes.filter(d => d.estado === 'Pagado').length;
-  const totalPendiente = mockDocentes.filter(d => d.estado === 'Pendiente').length;
-  const sinBoleta = mockDocentes.filter(d => !d.recepcionBHE).length;
+  // Refresco en vivo cuando el admin de pagos cambia algo desde la Bandeja.
+  const [version, setVersion] = useState(0);
+  useEffect(() => subscribePagosAdmin(() => setVersion(v => v + 1)), []);
+
+  // ── Datos canónicos del semestre activo ───────────────────────────────────
+  // `getCuotasAdmin()` ya enriquece cada cuota con su docente, propuesta y boleta.
+  const cuotas = useMemo<CuotaConContexto[]>(() => getCuotasAdmin(), [version]);
+
+  // Docentes con propuesta activa (los únicos relevantes para el panel de pagos).
+  const docentesActivos = useMemo(() => {
+    const ids = new Set(cuotas.map(c => c.docente.id));
+    return mockDocentesMaestros.filter(d => ids.has(d.id));
+  }, [cuotas]);
+
+  // Agrupo por jornada usando `numeroCuotas` de la propuesta (4=Diurna, 5=Vespertina).
+  const propuestasUnicas = useMemo(() => {
+    const map = new Map<number, CuotaConContexto['propuesta']>();
+    for (const c of cuotas) map.set(c.propuesta.id, c.propuesta);
+    return Array.from(map.values());
+  }, [cuotas]);
+
+  const propsDiurnas = propuestasUnicas.filter(p => p.numeroCuotas === 4);
+  const propsVespertinas = propuestasUnicas.filter(p => p.numeroCuotas === 5);
+
+  const totalDocentes = docentesActivos.length;
+  const docentesDiurnos = propsDiurnas.length;
+  const docentesVespertinos = propsVespertinas.length;
+  const totalPropuestas$ = propuestasUnicas.reduce((s, p) => s + p.montoTotalPropuesta, 0);
+
+  // Pagos: granularidad por cuota (no por docente, que era lo que hacía el legacy).
+  const totalCuotas = cuotas.length;
+  const cuotasPagadas = cuotas.filter(c => c.cuota.estadoPago === 'Pagada').length;
+  const porcentajePagado = totalCuotas > 0 ? Math.round((cuotasPagadas / totalCuotas) * 100) : 0;
+
+  // Alertas operativas: lo que requiere atención del admin de pagos.
+  const boletasPorRevisar = cuotas.filter(c => c.cuota.boletaEstado === 'Subida').length;
+  const conObservacion = cuotas.filter(c => c.cuota.boletaEstado === 'Con Observación').length;
+  const sinBoleta = cuotas.filter(
+    c => c.cuota.estadoPago === 'Pendiente' && (!c.cuota.boletaId || c.cuota.boletaEstado === 'Inexistente')
+  ).length;
+  const totalAlertas = boletasPorRevisar + conObservacion + sinBoleta;
+
+  // Lista de cuotas con problemas (top 8 por prioridad: por revisar > obs > sin boleta).
+  const alertasDetalle = useMemo(() => {
+    const orden: Record<string, number> = { 'Subida': 0, 'Con Observación': 1, 'Inexistente': 2 };
+    return cuotas
+      .filter(c => {
+        const e = c.cuota.boletaEstado ?? 'Inexistente';
+        if (e === 'Subida' || e === 'Con Observación') return true;
+        return c.cuota.estadoPago === 'Pendiente' && e === 'Inexistente';
+      })
+      .sort((a, b) => {
+        const ea = a.cuota.boletaEstado ?? 'Inexistente';
+        const eb = b.cuota.boletaEstado ?? 'Inexistente';
+        return (orden[ea] ?? 9) - (orden[eb] ?? 9);
+      })
+      .slice(0, 8);
+  }, [cuotas]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      maximumFractionDigits: 0
+    }).format(amount);
   };
 
   return (
@@ -29,13 +91,13 @@ export function AdminDashboard() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Docentes</CardTitle>
+            <CardTitle className="text-sm font-medium">Docentes con propuesta</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalDocentes}</div>
             <p className="text-xs text-gray-600">
-              {docentesDiurnos} Diurnos / {docentesVespertinos} Vespertinos
+              {docentesDiurnos} Diurnos · {docentesVespertinos} Vespertinos
             </p>
           </CardContent>
         </Card>
@@ -46,23 +108,21 @@ export function AdminDashboard() {
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalPropuestas)}</div>
-            <p className="text-xs text-gray-600">Semestre completo</p>
+            <div className="text-2xl font-bold">{formatCurrency(totalPropuestas$)}</div>
+            <p className="text-xs text-gray-600">Suma de los {propuestasUnicas.length} contratos</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos Completos</CardTitle>
+            <CardTitle className="text-sm font-medium">Cuotas pagadas</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {totalPagado}/{totalDocentes}
+              {cuotasPagadas}/{totalCuotas}
             </div>
-            <p className="text-xs text-gray-600">
-              {Math.round((totalPagado / totalDocentes) * 100)}% completado
-            </p>
+            <p className="text-xs text-gray-600">{porcentajePagado}% del semestre</p>
           </CardContent>
         </Card>
 
@@ -72,18 +132,18 @@ export function AdminDashboard() {
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalPendiente + sinBoleta}</div>
+            <div className="text-2xl font-bold">{totalAlertas}</div>
             <p className="text-xs text-gray-600">
-              {totalPendiente} pendientes, {sinBoleta} sin boleta
+              {boletasPorRevisar} por revisar · {conObservacion} c/obs · {sinBoleta} sin boleta
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Access */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Quick Access — solo destinos reales */}
+      <div className="grid gap-6 md:grid-cols-3">
         <Link to="/admin/docentes">
-          <Card className="cursor-pointer transition-all hover:shadow-lg">
+          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-blue-100 p-3">
@@ -91,109 +151,129 @@ export function AdminDashboard() {
                 </div>
                 <div>
                   <CardTitle>Base de Datos Docentes</CardTitle>
-                  <CardDescription>Gestión completa de docentes y pagos</CardDescription>
+                  <CardDescription>Maestros, designación PMA y propuestas</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600">
-                Acceda a la tabla principal con búsqueda, filtros, carga de boletas y gestión de cuotas.
+                Tabla maestra de docentes, asignación de horas P/M/A y vista consolidada de propuestas semestrales.
               </p>
             </CardContent>
           </Card>
         </Link>
 
-        <Card className="cursor-pointer transition-all hover:shadow-lg">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-green-100 p-3">
-                <Mail className="h-6 w-6 text-green-600" />
+        <Link to="/admin/docentes#bandeja">
+          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-orange-100 p-3">
+                  <Inbox className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <CardTitle>Bandeja de Boletas</CardTitle>
+                  <CardDescription>Workflow de pagos del semestre</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Correos Masivos</CardTitle>
-                <CardDescription>Enviar comunicaciones a docentes</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600">
-              Sistema de envío de correos masivos con redacción personalizada.
-            </p>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                Revisar boletas subidas, registrar pagos con fecha y referencia, y dejar notas a los docentes.
+              </p>
+              {totalAlertas > 0 && (
+                <Badge variant="destructive" className="mt-2">
+                  {totalAlertas} pendiente{totalAlertas === 1 ? '' : 's'}
+                </Badge>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="cursor-pointer transition-all hover:shadow-lg">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-100 p-3">
-                <FileText className="h-6 w-6 text-purple-600" />
+        <Link to="/admin/reportes">
+          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-purple-100 p-3">
+                  <FileText className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <CardTitle>Informes y Reportes</CardTitle>
+                  <CardDescription>Exportación a PDF</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Informes y Reportes</CardTitle>
-                <CardDescription>Totales y estadísticas semestrales</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600">
-              Generación de informes con totales de propuestas y cuotas mensuales.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer transition-all hover:shadow-lg">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-orange-100 p-3">
-                <DollarSign className="h-6 w-6 text-orange-600" />
-              </div>
-              <div>
-                <CardTitle>Gestión de Boletas</CardTitle>
-                <CardDescription>Carga y seguimiento de BHE</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600">
-              Cargar y gestionar boletas de honorarios electrónicas por docente.
-            </p>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                Generación de reportes filtrados por estado y jornada, descargables en PDF.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
-      {/* Alertas y Pendientes */}
+      {/* Alertas y Pendientes (basadas en cuotas reales) */}
       <Card>
         <CardHeader>
           <CardTitle>Alertas y Acciones Pendientes</CardTitle>
-          <CardDescription>Docentes que requieren atención</CardDescription>
+          <CardDescription>
+            Cuotas que requieren atención (mostrando hasta 8){' '}
+            <Link to="/admin/docentes#bandeja" className="text-blue-600 hover:underline">
+              · Ver todas en la Bandeja →
+            </Link>
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {mockDocentes
-              .filter(d => d.estado === 'Pendiente' || !d.recepcionBHE)
-              .map((docente) => (
-                <div
-                  key={docente.id}
-                  className="flex items-start gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4"
-                >
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
-                  <div className="flex-1">
-                    <h4 className="font-medium">{docente.nombreCompleto}</h4>
-                    <p className="text-sm text-gray-700">
-                      {docente.carrera} - {docente.jornada}
-                    </p>
-                    <ul className="mt-1 space-y-1 text-sm text-gray-700">
-                      {docente.estado === 'Pendiente' && <li>• Pago pendiente</li>}
-                      {!docente.recepcionBHE && <li>• Falta recepción de boleta</li>}
-                    </ul>
+          {alertasDetalle.length === 0 ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              ✓ Todas las cuotas del semestre están al día.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {alertasDetalle.map(({ cuota, docente, boleta }) => {
+                const estado = cuota.boletaEstado ?? 'Inexistente';
+                const motivo =
+                  estado === 'Subida'
+                    ? 'Boleta subida — pendiente de revisar'
+                    : estado === 'Con Observación'
+                      ? 'Boleta con observación — esperando corrección del docente'
+                      : 'Sin boleta cargada';
+                return (
+                  <div
+                    key={cuota.id}
+                    className="flex items-start gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4"
+                  >
+                    <AlertCircle className="h-5 w-5 shrink-0 text-yellow-600" />
+                    <div className="flex-1">
+                      <h4 className="font-medium">{docente.nombreCompleto}</h4>
+                      <p className="text-sm text-gray-700">
+                        {cuota.mes} · Cuota {cuota.numeroCuota} · {formatCurrency(cuota.montoBruto)}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-700">• {motivo}</p>
+                      {boleta?.observaciones && (
+                        <p className="mt-1 text-xs italic text-orange-700">
+                          "{boleta.observaciones}"
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <Badge
+                        variant="outline"
+                        className={
+                          estado === 'Subida'
+                            ? 'border-amber-300 bg-amber-100 text-amber-800'
+                            : estado === 'Con Observación'
+                              ? 'border-orange-300 bg-orange-100 text-orange-800'
+                              : 'border-gray-300 bg-gray-100 text-gray-700'
+                        }
+                      >
+                        {estado === 'Inexistente' ? 'Sin boleta' : estado}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">Saldo</p>
-                    <p className="text-sm text-gray-600">{formatCurrency(docente.saldo)}</p>
-                  </div>
-                </div>
-              ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -202,72 +282,62 @@ export function AdminDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Jornada Diurna</CardTitle>
-            <CardDescription>4 cuotas: Abril - Mayo - Junio - Julio</CardDescription>
+            <CardDescription>4 cuotas: Abril · Mayo · Junio · Julio</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Total Docentes:</span>
-                <span className="font-medium">{docentesDiurnos}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Total Propuestas:</span>
-                <span className="font-medium">
-                  {formatCurrency(
-                    mockDocentes
-                      .filter(d => d.jornada === 'Diurna')
-                      .reduce((sum, d) => sum + d.montoTotalPropuesta, 0)
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Cuota Mensual Promedio:</span>
-                <span className="font-medium">
-                  {formatCurrency(
-                    mockDocentes
-                      .filter(d => d.jornada === 'Diurna')
-                      .reduce((sum, d) => sum + d.valorCuotaBruto, 0) / docentesDiurnos
-                  )}
-                </span>
-              </div>
-            </div>
+            <JornadaResumen
+              propuestas={propsDiurnas}
+              formatCurrency={formatCurrency}
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Jornada Vespertina</CardTitle>
-            <CardDescription>5 cuotas: Abril - Mayo - Junio - Julio - Agosto</CardDescription>
+            <CardDescription>5 cuotas: Abril · Mayo · Junio · Julio · Agosto</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Total Docentes:</span>
-                <span className="font-medium">{docentesVespertinos}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Total Propuestas:</span>
-                <span className="font-medium">
-                  {formatCurrency(
-                    mockDocentes
-                      .filter(d => d.jornada === 'Vespertina')
-                      .reduce((sum, d) => sum + d.montoTotalPropuesta, 0)
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Cuota Mensual Promedio:</span>
-                <span className="font-medium">
-                  {formatCurrency(
-                    mockDocentes
-                      .filter(d => d.jornada === 'Vespertina')
-                      .reduce((sum, d) => sum + d.valorCuotaBruto, 0) / docentesVespertinos
-                  )}
-                </span>
-              </div>
-            </div>
+            <JornadaResumen
+              propuestas={propsVespertinas}
+              formatCurrency={formatCurrency}
+            />
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//   Subcomponente: resumen por jornada
+// ────────────────────────────────────────────────────────────────────────────
+
+function JornadaResumen({
+  propuestas,
+  formatCurrency
+}: {
+  propuestas: CuotaConContexto['propuesta'][];
+  formatCurrency: (n: number) => string;
+}) {
+  const total = propuestas.reduce((s, p) => s + p.montoTotalPropuesta, 0);
+  const cuotaPromedio =
+    propuestas.length > 0
+      ? propuestas.reduce((s, p) => s + p.valorCuotaBruto, 0) / propuestas.length
+      : 0;
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between text-sm">
+        <span>Total Docentes:</span>
+        <span className="font-medium">{propuestas.length}</span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span>Total Propuestas:</span>
+        <span className="font-medium">{formatCurrency(total)}</span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span>Cuota Mensual Promedio:</span>
+        <span className="font-medium">{formatCurrency(Math.round(cuotaPromedio))}</span>
       </div>
     </div>
   );
