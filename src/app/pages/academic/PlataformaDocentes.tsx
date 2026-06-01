@@ -24,9 +24,12 @@ export function PlataformaDocentes() {
   const estadisticas = {
     totalDocentes: docentes.length,
     documentacionCompleta: docentes.filter(
-      d => d.cvActualizado && d.certificadoTitulo && d.certificadoAntecedentes && d.certificadoInhabilidad
+      d => d.cvActualizado === 'Validado' && 
+           d.certificadoTitulo === 'Validado' && 
+           d.certificadoAntecedentes === 'Validado' && 
+           d.certificadoInhabilidad === 'Validado'
     ).length,
-    cvActualizados: docentes.filter(d => d.cvActualizado).length,
+    cvActualizados: docentes.filter(d => d.cvActualizado === 'Validado').length,
     promedioCapacitaciones: Math.round(
       docentes.reduce((sum, d) => sum + d.capacitaciones, 0) / docentes.length
     )
@@ -129,9 +132,9 @@ export function PlataformaDocentes() {
               <TableBody>
                 {filteredDocentes.map((docente) => {
                   const certificadosCompletos =
-                    docente.certificadoTitulo &&
-                    docente.certificadoAntecedentes &&
-                    docente.certificadoInhabilidad;
+                    docente.certificadoTitulo === 'Validado' &&
+                    docente.certificadoAntecedentes === 'Validado' &&
+                    docente.certificadoInhabilidad === 'Validado';
 
                   const ramos = getRamosDocente(docente.id);
 
@@ -158,8 +161,10 @@ export function PlataformaDocentes() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {docente.cvActualizado ? (
+                        {docente.cvActualizado === 'Validado' ? (
                           <Badge variant="default" className="text-xs">Al día</Badge>
+                        ) : docente.cvActualizado === 'Por Revisar' ? (
+                          <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                         ) : (
                           <Badge variant="destructive" className="text-xs">Pendiente</Badge>
                         )}
@@ -277,14 +282,20 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoTitulo ? (
+                          {currentDocente.certificadoTitulo === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_titulo.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs">Disponible</Badge>
+                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
+                            </>
+                          ) : currentDocente.certificadoTitulo === 'Por Revisar' ? (
+                            <>
+                              <FileText className="h-4 w-4 text-yellow-600" />
+                              <span className="text-sm">certificado_titulo.pdf</span>
+                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                             </>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">No disponible</Badge>
+                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
                           )}
                         </div>
                       </CardContent>
@@ -296,14 +307,20 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoAntecedentes ? (
+                          {currentDocente.certificadoAntecedentes === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_antecedentes.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs">Disponible</Badge>
+                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
+                            </>
+                          ) : currentDocente.certificadoAntecedentes === 'Por Revisar' ? (
+                            <>
+                              <FileText className="h-4 w-4 text-yellow-600" />
+                              <span className="text-sm">certificado_antecedentes.pdf</span>
+                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                             </>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">No disponible</Badge>
+                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
                           )}
                         </div>
                       </CardContent>
@@ -315,14 +332,20 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoInhabilidad ? (
+                          {currentDocente.certificadoInhabilidad === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_inhabilidad.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs">Disponible</Badge>
+                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
+                            </>
+                          ) : currentDocente.certificadoInhabilidad === 'Por Revisar' ? (
+                            <>
+                              <FileText className="h-4 w-4 text-yellow-600" />
+                              <span className="text-sm">certificado_inhabilidad.pdf</span>
+                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                             </>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">No disponible</Badge>
+                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
                           )}
                         </div>
                       </CardContent>
@@ -334,14 +357,20 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.carnetIdentidad ? (
+                          {currentDocente.carnetIdentidad === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">carnet_identidad.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs">Disponible</Badge>
+                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
+                            </>
+                          ) : currentDocente.carnetIdentidad === 'Por Revisar' ? (
+                            <>
+                              <FileText className="h-4 w-4 text-yellow-600" />
+                              <span className="text-sm">carnet_identidad.pdf</span>
+                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                             </>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">No disponible</Badge>
+                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
                           )}
                         </div>
                       </CardContent>

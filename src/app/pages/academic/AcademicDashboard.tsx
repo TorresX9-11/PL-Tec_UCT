@@ -5,9 +5,9 @@ import { mockDocentesAcademicos } from '../../data/mockData';
 
 export function AcademicDashboard() {
   const totalDocentes = mockDocentesAcademicos.length;
-  const cvCompleto = mockDocentesAcademicos.filter(d => d.cvActualizado).length;
+  const cvCompleto = mockDocentesAcademicos.filter(d => d.cvActualizado === 'Validado').length;
   const documentacionCompleta = mockDocentesAcademicos.filter(
-    d => d.certificadoTitulo && d.certificadoAntecedentes && d.certificadoInhabilidad
+    d => d.certificadoTitulo === 'Validado' && d.certificadoAntecedentes === 'Validado' && d.certificadoInhabilidad === 'Validado'
   ).length;
   const contenidoAlDia = mockDocentesAcademicos.filter(d => d.contenidoSubido).length;
   const notasAlDia = mockDocentesAcademicos.filter(d => d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales).length;
@@ -184,7 +184,7 @@ export function AcademicDashboard() {
         <CardContent>
           <div className="space-y-3">
             {mockDocentesAcademicos
-              .filter(d => !d.cvActualizado || !d.certificadoAntecedentes || !d.contenidoSubido || d.notasIngresadas < d.notasTotales)
+              .filter(d => d.cvActualizado !== 'Validado' || d.certificadoAntecedentes !== 'Validado' || !d.contenidoSubido || d.notasIngresadas < d.notasTotales)
               .map((docente) => (
                 <div
                   key={docente.id}
@@ -194,8 +194,8 @@ export function AcademicDashboard() {
                   <div className="flex-1">
                     <h4 className="font-medium">{docente.nombreCompleto}</h4>
                     <ul className="mt-1 space-y-1 text-sm text-gray-700">
-                      {!docente.cvActualizado && <li>• Actualizar CV</li>}
-                      {!docente.certificadoAntecedentes && <li>• Subir certificado de antecedentes</li>}
+                      {docente.cvActualizado !== 'Validado' && <li>• Actualizar CV</li>}
+                      {docente.certificadoAntecedentes !== 'Validado' && <li>• Subir certificado de antecedentes</li>}
                       {!docente.contenidoSubido && <li>• Subir contenido a plataformas</li>}
                       {docente.notasIngresadas < docente.notasTotales && (
                         <li>• Actualizar registro de notas ({docente.notasIngresadas}/{docente.notasTotales})</li>
@@ -206,7 +206,7 @@ export function AcademicDashboard() {
               ))}
 
             {mockDocentesAcademicos.filter(
-              d => d.cvActualizado && d.certificadoAntecedentes && d.contenidoSubido && d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales
+              d => d.cvActualizado === 'Validado' && d.certificadoAntecedentes === 'Validado' && d.contenidoSubido && d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales
             ).length === totalDocentes && (
               <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
                 <CheckCircle className="h-5 w-5" />

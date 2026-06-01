@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { mockAsignaturas, mockCarreras, type Asignatura } from '../../data/mockData';
+import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, type Asignatura, type SeccionAsignatura } from '../../data/mockData';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -17,8 +17,9 @@ export function TablaAsignaturas() {
   const [carreraFilter, setCarreraFilter] = useState<string>('todas');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingAsignatura, setEditingAsignatura] = useState<Asignatura | null>(null);
+  const [addingSeccionFor, setAddingSeccionFor] = useState<Asignatura | null>(null);
 
-  const filteredAsignaturas = asignaturas.filter((asig) => {
+  const filteredAsignaturas = asignaturas.filter((asig: Asignatura) => {
     const matchesSearch =
       asig.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asig.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -33,7 +34,7 @@ export function TablaAsignaturas() {
 
   const handleDeleteAsignatura = (id: number) => {
     if (confirm('¿Está seguro de eliminar esta asignatura?')) {
-      setAsignaturas(asignaturas.filter(a => a.id !== id));
+      setAsignaturas(asignaturas.filter((a: Asignatura) => a.id !== id));
       toast.success('Asignatura eliminada exitosamente');
     }
   };
@@ -44,7 +45,7 @@ export function TablaAsignaturas() {
   };
 
   const handleUpdateAsignatura = (updatedAsignatura: Asignatura) => {
-    setAsignaturas(asignaturas.map(a => a.id === updatedAsignatura.id ? updatedAsignatura : a));
+    setAsignaturas(asignaturas.map((a: Asignatura) => a.id === updatedAsignatura.id ? updatedAsignatura : a));
     setEditingAsignatura(null);
     setOpenDialog(false);
     toast.success('Asignatura actualizada exitosamente');
@@ -53,7 +54,7 @@ export function TablaAsignaturas() {
   // Group by carrera for summary
   const asignaturasPorCarrera = mockCarreras.map(carrera => ({
     carrera: carrera.nombre,
-    count: asignaturas.filter(a => a.carreraId === carrera.id).length
+    count: asignaturas.filter((a: Asignatura) => a.carreraId === carrera.id).length
   })).filter(item => item.count > 0);
 
   return (
@@ -66,7 +67,7 @@ export function TablaAsignaturas() {
             Administración de asignaturas por carrera
           </p>
         </div>
-        <Dialog open={openDialog} onOpenChange={(open) => {
+        <Dialog open={openDialog} onOpenChange={(open: boolean) => {
           setOpenDialog(open);
           if (!open) setEditingAsignatura(null);
         }}>
@@ -141,7 +142,7 @@ export function TablaAsignaturas() {
                 <Input
                   placeholder="Buscar por nombre, código o sigla..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -185,7 +186,7 @@ export function TablaAsignaturas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAsignaturas.map((asignatura) => (
+                {filteredAsignaturas.map((asignatura: Asignatura) => (
                   <TableRow key={asignatura.id}>
                     <TableCell className="font-medium">{asignatura.id}</TableCell>
                     <TableCell className="font-mono text-sm">{asignatura.codigo}</TableCell>
@@ -203,6 +204,15 @@ export function TablaAsignaturas() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          title="Agregar Sección/Grupo"
+                          onClick={() => setAddingSeccionFor(asignatura)}
+                        >
+                          <Plus className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Editar Asignatura"
                           onClick={() => handleEditAsignatura(asignatura)}
                         >
                           <Edit className="h-4 w-4" />
@@ -210,6 +220,7 @@ export function TablaAsignaturas() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          title="Eliminar Asignatura"
                           onClick={() => handleDeleteAsignatura(asignatura.id)}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
@@ -223,7 +234,148 @@ export function TablaAsignaturas() {
           </div>
         </CardContent>
       </Card>
+      {/* Dialog para Agregar Sección/Grupo */}
+      <Dialog open={addingSeccionFor !== null} onOpenChange={(open: boolean) => {
+        if (!open) setAddingSeccionFor(null);
+      }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              Nueva {addingSeccionFor?.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'} - {addingSeccionFor?.sigla}
+            </DialogTitle>
+            <DialogDescription>
+              Cree una nueva sección o grupo para la asignatura {addingSeccionFor?.nombre}. Las horas definidas aquí se usarán en la asignación PMA.
+            </DialogDescription>
+          </DialogHeader>
+          {addingSeccionFor && (
+            <FormularioSeccion
+              asignatura={addingSeccionFor}
+              onClose={() => setAddingSeccionFor(null)}
+              onSave={(seccionData) => {
+                // Crear nueva seccion en el mock
+                const newId = mockSeccionesAsignaturas.length > 0 
+                  ? Math.max(...mockSeccionesAsignaturas.map(s => s.id)) + 1 
+                  : 1;
+                
+                const nuevaSeccion: SeccionAsignatura = {
+                  id: newId,
+                  asignaturaId: addingSeccionFor.id,
+                  seccion: seccionData.seccion,
+                  horasP: seccionData.horasP,
+                  horasM: seccionData.horasM,
+                  horasA: seccionData.horasA
+                };
+                
+                mockSeccionesAsignaturas.push(nuevaSeccion);
+                setAddingSeccionFor(null);
+                toast.success(`${addingSeccionFor.tipoSeccion === 'Grupo' ? 'Grupo creado' : 'Sección creada'} exitosamente. Ahora está disponible en la Capa 2.`);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+interface FormularioSeccionProps {
+  asignatura: Asignatura;
+  onClose: () => void;
+  onSave: (data: { seccion: number, horasP: number, horasM: number, horasA: number }) => void;
+}
+
+function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionProps) {
+  // Pre-calcular el número sugerido (el siguiente disponible para esta asignatura)
+  const seccionesActuales = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
+  const nextSeccionNum = seccionesActuales.length > 0 
+    ? Math.max(...seccionesActuales.map(s => s.seccion)) + 1 
+    : 1;
+
+  const [formData, setFormData] = useState({
+    seccion: nextSeccionNum,
+    horasP: 0,
+    horasM: 0,
+    horasA: 0
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.seccion <= 0) {
+      toast.error('El número de sección debe ser mayor a 0');
+      return;
+    }
+
+    // Validar que no exista ya otra sección/grupo con ese mismo número para esta asignatura
+    const seccionExiste = seccionesActuales.some((s) => s.seccion === formData.seccion);
+    if (seccionExiste) {
+      toast.error(`El número de ${asignatura.tipoSeccion === 'Grupo' ? 'grupo' : 'sección'} ${formData.seccion} ya existe en esta asignatura`);
+      return;
+    }
+
+    onSave(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="seccionNum">Número de {asignatura.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'} *</Label>
+          <Input
+            id="seccionNum"
+            type="number"
+            min="1"
+            value={formData.seccion}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, seccion: parseInt(e.target.value) || 0 })}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div>
+          <Label htmlFor="horasP">Horas Presenciales (P)</Label>
+          <Input
+            id="horasP"
+            type="number"
+            min="0"
+            value={formData.horasP}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasP: parseInt(e.target.value) || 0 })}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="horasM">Horas Mixtas (M)</Label>
+          <Input
+            id="horasM"
+            type="number"
+            min="0"
+            value={formData.horasM}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasM: parseInt(e.target.value) || 0 })}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="horasA">Horas Autónomas (A)</Label>
+          <Input
+            id="horasA"
+            type="number"
+            min="0"
+            value={formData.horasA}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasA: parseInt(e.target.value) || 0 })}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+          Cancelar
+        </Button>
+        <Button type="submit" className="flex-1">
+          Guardar {asignatura.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -258,7 +410,7 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
         <Label htmlFor="carreraId">Carrera *</Label>
         <Select
           value={formData.carreraId.toString()}
-          onValueChange={(value) => setFormData({ ...formData, carreraId: Number(value) })}
+          onValueChange={(value: string) => setFormData({ ...formData, carreraId: Number(value) })}
         >
           <SelectTrigger id="carreraId">
             <SelectValue placeholder="Seleccione una carrera" />
@@ -280,7 +432,7 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
             id="codigo"
             placeholder="INF-101"
             value={formData.codigo}
-            onChange={(e) => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })}
             required
           />
         </div>
@@ -290,7 +442,7 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
             id="sigla"
             placeholder="PROG1"
             value={formData.sigla}
-            onChange={(e) => setFormData({ ...formData, sigla: e.target.value.toUpperCase() })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, sigla: e.target.value.toUpperCase() })}
             required
           />
         </div>
@@ -302,7 +454,7 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
           id="nombre"
           placeholder="Programación I"
           value={formData.nombre}
-          onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, nombre: e.target.value })}
           required
         />
       </div>

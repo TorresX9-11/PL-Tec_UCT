@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Download, FileText, Calendar } from 'lucide-react';
-import { mockDocentes } from '../../data/mockData';
+import { mockDocentesMaestros, mockCarreras, mockAsignaturas, mockSeccionesAsignaturas, mockPropuestasSemestrales } from '../../data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -13,19 +13,45 @@ export function Reportes() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [filtroJornada, setFiltroJornada] = useState<string>('todos');
 
+  // Construir la vista de docentes con propuesta (similar al dashboard)
+  const docentesParaReporte = useMemo(() => {
+    return mockDocentesMaestros.map(docente => {
+      // Buscar propuesta del semestre activo
+      const propuesta = mockPropuestasSemestrales.find(p => p.docenteId === docente.id && p.semestre === 1 && p.año === 2026);
+      
+      // Si no tiene propuesta, su estado de pago es 'Sin propuesta' o se omite
+      const estadoPago = propuesta ? propuesta.estadoPago : 'Sin propuesta';
+      const jornada = propuesta ? (propuesta.numeroCuotas === 5 ? 'Vespertina' : 'Diurna') : 'Sin Asignar';
+      
+      // Buscar las carreras asociadas a las secciones de este docente
+      const secciones = mockSeccionesAsignaturas.filter(s => s.docenteId === docente.id);
+      const carrerasIds = new Set(secciones.map(s => {
+        const asig = mockAsignaturas.find(a => a.id === s.asignaturaId);
+        return asig ? asig.carreraId : null;
+      }).filter(Boolean));
+      
+      const carrerasNombres = Array.from(carrerasIds)
+        .map(id => mockCarreras.find(c => c.id === id)?.nombre)
+        .filter(Boolean)
+        .join(', ');
+
+      return {
+        ...docente,
+        carrera: carrerasNombres || 'Sin carrera',
+        jornada,
+        estado: estadoPago
+      };
+    }).filter(d => d.estado !== 'Sin propuesta'); // Solo incluir los que tienen propuesta (pago activo)
+  }, []);
+
+  const docentesFiltrados = docentesParaReporte.filter((d: any) => {
+    const cumpleEstado = filtroEstado === 'todos' || d.estado === filtroEstado;
+    const cumpleJornada = filtroJornada === 'todos' || d.jornada === filtroJornada;
+    return cumpleEstado && cumpleJornada;
+  });
+
   const generarReportePDF = () => {
     const doc = new jsPDF();
-
-    // Filtrar docentes según los criterios
-    let docentesFiltrados = mockDocentes;
-
-    if (filtroEstado !== 'todos') {
-      docentesFiltrados = docentesFiltrados.filter(d => d.estado === filtroEstado);
-    }
-
-    if (filtroJornada !== 'todos') {
-      docentesFiltrados = docentesFiltrados.filter(d => d.jornada === filtroJornada);
-    }
 
     // Título del reporte
     doc.setFontSize(18);
@@ -36,7 +62,7 @@ export function Reportes() {
     doc.text(`Total Docentes: ${docentesFiltrados.length}`, 14, 34);
 
     // Preparar datos para la tabla
-    const tableData = docentesFiltrados.map(docente => [
+    const tableData = docentesFiltrados.map((docente: any) => [
       docente.carrera,
       docente.jornada,
       docente.rut,
@@ -59,12 +85,6 @@ export function Reportes() {
     doc.save(`reporte-docentes-${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success('Reporte PDF generado exitosamente');
   };
-
-  const docentesFiltrados = mockDocentes.filter(d => {
-    const cumpleEstado = filtroEstado === 'todos' || d.estado === filtroEstado;
-    const cumpleJornada = filtroJornada === 'todos' || d.jornada === filtroJornada;
-    return cumpleEstado && cumpleJornada;
-  });
 
   return (
     <div className="space-y-6">

@@ -193,115 +193,6 @@ export interface Boleta {
   observaciones?: string;
 }
 
-export interface DocenteAcademico {
-  id: number;
-  nombreCompleto: string;
-  rut: string;
-  correo: string;
-  // Cambio a sistema de 3 estados
-  cvActualizado: EstadoValidacion;
-  certificadoTitulo: EstadoValidacion;
-  certificadoAntecedentes: EstadoValidacion;
-  certificadoInhabilidad: EstadoValidacion;
-  carnetIdentidad: EstadoValidacion;
-  capacitaciones: number;
-  contenidoSubido: boolean;
-  // Progreso de notas: cuántas evaluaciones tienen nota cargada vs el total esperado
-  // (refleja `cursos.notas_ingresadas` / `cursos.notas_curso` en BD agregado por docente)
-  notasIngresadas: number;
-  notasTotales: number;
-  guiaAprendizaje: 'Validado' | 'Pendiente' | 'Sin Guía';
-  boletas: Boleta[];
-  password?: string; // Para login de docentes
-}
-
-export const mockDocentesAcademicos: DocenteAcademico[] = [
-  {
-    id: 1,
-    nombreCompleto: 'Juan Carlos Pérez González',
-    rut: '12.345.678-9',
-    correo: 'juan.perez@uct.cl',
-    cvActualizado: 'Validado',
-    certificadoTitulo: 'Validado',
-    certificadoAntecedentes: 'Validado',
-    certificadoInhabilidad: 'Validado',
-    carnetIdentidad: 'Validado',
-    capacitaciones: 5,
-    contenidoSubido: true,
-    notasIngresadas: 4,
-    notasTotales: 4,
-    guiaAprendizaje: 'Validado',
-    boletas: [
-      { id: 1, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
-      { id: 2, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
-      { id: 3, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
-      { id: 4, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
-    ],
-    password: 'docente123'
-  },
-  {
-    id: 2,
-    nombreCompleto: 'María Teresa Rodríguez Silva',
-    rut: '13.456.789-0',
-    correo: 'maria.rodriguez@uct.cl',
-    cvActualizado: 'Validado',
-    certificadoTitulo: 'Validado',
-    certificadoAntecedentes: 'Por Revisar',
-    certificadoInhabilidad: 'Validado',
-    carnetIdentidad: 'Validado',
-    capacitaciones: 3,
-    contenidoSubido: true,
-    notasIngresadas: 2,
-    notasTotales: 4,
-    guiaAprendizaje: 'Pendiente',
-    boletas: [
-      { id: 5, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
-      { id: 6, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' }
-    ],
-    password: 'docente123'
-  },
-  {
-    id: 3,
-    nombreCompleto: 'Pedro Antonio Morales Castro',
-    rut: '14.567.890-1',
-    correo: 'pedro.morales@uct.cl',
-    cvActualizado: 'Por Revisar',
-    certificadoTitulo: 'Validado',
-    certificadoAntecedentes: 'Validado',
-    certificadoInhabilidad: 'Validado',
-    carnetIdentidad: 'Inexistente',
-    capacitaciones: 7,
-    contenidoSubido: false,
-    notasIngresadas: 3,
-    notasTotales: 3,
-    guiaAprendizaje: 'Sin Guía',
-    boletas: [],
-    password: 'docente123'
-  },
-  {
-    id: 4,
-    nombreCompleto: 'Ana Patricia Fernández López',
-    rut: '15.678.901-2',
-    correo: 'ana.fernandez@uct.cl',
-    cvActualizado: 'Validado',
-    certificadoTitulo: 'Validado',
-    certificadoAntecedentes: 'Validado',
-    certificadoInhabilidad: 'Validado',
-    carnetIdentidad: 'Validado',
-    capacitaciones: 4,
-    contenidoSubido: true,
-    notasIngresadas: 4,
-    notasTotales: 4,
-    guiaAprendizaje: 'Validado',
-    boletas: [
-      { id: 7, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
-      { id: 8, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
-      { id: 9, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
-      { id: 10, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
-    ],
-    password: 'docente123'
-  }
-];
 
 // ================================
 // MÓDULO CARRERAS Y ASIGNATURAS
@@ -331,6 +222,7 @@ export interface SeccionAsignatura {
   id: number;
   asignaturaId: number;
   seccion: number; // 1, 2, 3...
+  subGrupo?: string; // 'A', 'B', 'C'... para divisiones
   docenteId?: number; // ID del docente asignado, undefined si no asignado
   horasP: number;
   horasM: number;
@@ -438,6 +330,20 @@ export interface DocenteMaestro {
   correo: string;
   nivelDocente?: 'A' | 'B' | 'C'; // Opcional - sin nivel no se puede hacer propuesta económica
   fechaIngreso: string;
+
+  // --- Campos Académicos (Unificados) ---
+  cvActualizado: EstadoValidacion;
+  certificadoTitulo: EstadoValidacion;
+  certificadoAntecedentes: EstadoValidacion;
+  certificadoInhabilidad: EstadoValidacion;
+  carnetIdentidad: EstadoValidacion;
+  capacitaciones: number;
+  contenidoSubido: boolean;
+  notasIngresadas: number;
+  notasTotales: number;
+  guiaAprendizaje: 'Validado' | 'Pendiente' | 'Sin Guía';
+  boletas: Boleta[];
+  password?: string; // Para login de docentes
 }
 
 // Helper para extraer RUT y DV
@@ -502,7 +408,24 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'Juan Carlos Pérez González',
     correo: 'juan.perez@uct.cl',
     nivelDocente: 'A',
-    fechaIngreso: '2020-03-15'
+    fechaIngreso: '2020-03-15',
+    cvActualizado: 'Validado',
+    certificadoTitulo: 'Validado',
+    certificadoAntecedentes: 'Validado',
+    certificadoInhabilidad: 'Validado',
+    carnetIdentidad: 'Validado',
+    capacitaciones: 5,
+    contenidoSubido: true,
+    notasIngresadas: 4,
+    notasTotales: 4,
+    guiaAprendizaje: 'Validado',
+    boletas: [
+      { id: 1, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 2, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
+      { id: 3, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
+      { id: 4, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
+    ],
+    password: 'docente123'
   },
   {
     id: 2,
@@ -511,7 +434,22 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'María Teresa Rodríguez Silva',
     correo: 'maria.rodriguez@uct.cl',
     nivelDocente: 'B',
-    fechaIngreso: '2019-08-01'
+    fechaIngreso: '2019-08-01',
+    cvActualizado: 'Validado',
+    certificadoTitulo: 'Validado',
+    certificadoAntecedentes: 'Por Revisar',
+    certificadoInhabilidad: 'Validado',
+    carnetIdentidad: 'Validado',
+    capacitaciones: 3,
+    contenidoSubido: true,
+    notasIngresadas: 2,
+    notasTotales: 4,
+    guiaAprendizaje: 'Pendiente',
+    boletas: [
+      { id: 5, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 6, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' }
+    ],
+    password: 'docente123'
   },
   {
     id: 3,
@@ -520,7 +458,19 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'Pedro Antonio Morales Castro',
     correo: 'pedro.morales@uct.cl',
     nivelDocente: 'A',
-    fechaIngreso: '2021-03-10'
+    fechaIngreso: '2021-03-10',
+    cvActualizado: 'Por Revisar',
+    certificadoTitulo: 'Validado',
+    certificadoAntecedentes: 'Validado',
+    certificadoInhabilidad: 'Validado',
+    carnetIdentidad: 'Inexistente',
+    capacitaciones: 7,
+    contenidoSubido: false,
+    notasIngresadas: 3,
+    notasTotales: 3,
+    guiaAprendizaje: 'Sin Guía',
+    boletas: [],
+    password: 'docente123'
   },
   {
     id: 4,
@@ -529,7 +479,24 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'Ana Patricia Fernández López',
     correo: 'ana.fernandez@uct.cl',
     nivelDocente: 'A',
-    fechaIngreso: '2018-03-05'
+    fechaIngreso: '2018-03-05',
+    cvActualizado: 'Validado',
+    certificadoTitulo: 'Validado',
+    certificadoAntecedentes: 'Validado',
+    certificadoInhabilidad: 'Validado',
+    carnetIdentidad: 'Validado',
+    capacitaciones: 4,
+    contenidoSubido: true,
+    notasIngresadas: 4,
+    notasTotales: 4,
+    guiaAprendizaje: 'Validado',
+    boletas: [
+      { id: 7, nombre: 'Boleta Abril 2026', archivo: 'boleta_abril_2026.pdf', fecha: '30 Abril 2026', estado: 'Procesada' },
+      { id: 8, nombre: 'Boleta Mayo 2026', archivo: 'boleta_mayo_2026.pdf', fecha: '30 Mayo 2026', estado: 'Procesada' },
+      { id: 9, nombre: 'Boleta Junio 2026', archivo: 'boleta_junio_2026.pdf', fecha: '30 Junio 2026', estado: 'Procesada' },
+      { id: 10, nombre: 'Boleta Julio 2026', archivo: 'boleta_julio_2026.pdf', fecha: '30 Julio 2026', estado: 'Procesada' }
+    ],
+    password: 'docente123'
   },
   {
     id: 5,
@@ -538,7 +505,19 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'Roberto José Valenzuela Muñoz',
     correo: 'roberto.valenzuela@uct.cl',
     // nivelDocente sin asignar - no puede tener propuesta económica aún
-    fechaIngreso: '2026-03-01'
+    fechaIngreso: '2026-03-01',
+    cvActualizado: 'Inexistente',
+    certificadoTitulo: 'Inexistente',
+    certificadoAntecedentes: 'Inexistente',
+    certificadoInhabilidad: 'Inexistente',
+    carnetIdentidad: 'Inexistente',
+    capacitaciones: 0,
+    contenidoSubido: false,
+    notasIngresadas: 0,
+    notasTotales: 0,
+    guiaAprendizaje: 'Sin Guía',
+    boletas: [],
+    password: 'docente123'
   },
   {
     id: 6,
@@ -547,9 +526,24 @@ export const mockDocentesMaestros: DocenteMaestro[] = [
     nombreCompleto: 'Carmen Gloria Sánchez Torres',
     correo: 'carmen.sanchez@uct.cl',
     nivelDocente: 'B',
-    fechaIngreso: '2022-03-15'
+    fechaIngreso: '2022-03-15',
+    cvActualizado: 'Validado',
+    certificadoTitulo: 'Validado',
+    certificadoAntecedentes: 'Validado',
+    certificadoInhabilidad: 'Validado',
+    carnetIdentidad: 'Validado',
+    capacitaciones: 2,
+    contenidoSubido: true,
+    notasIngresadas: 0,
+    notasTotales: 2,
+    guiaAprendizaje: 'Pendiente',
+    boletas: [],
+    password: 'docente123'
   }
 ];
+
+export type DocenteAcademico = DocenteMaestro;
+export const mockDocentesAcademicos: DocenteAcademico[] = mockDocentesMaestros;
 
 // Mock Data - Designaciones PMA ahora se manejan mediante mockSeccionesAsignaturas (ver arriba)
 

@@ -408,7 +408,7 @@ export function TablaPropuestasSemestrales() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
+                            <DialogContent className="flex max-h-[95vh] max-w-[95vw] sm:max-w-[95vw] w-[95vw] flex-col overflow-hidden p-0">
                               <DialogHeader className="shrink-0 border-b px-6 py-4">
                                 <DialogTitle>Detalle de Propuesta</DialogTitle>
                                 <DialogDescription>
@@ -607,10 +607,6 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
           <div>
             <Label className="text-sm text-gray-600">Correo</Label>
             <p className="text-sm">{docente?.correo}</p>
-          </div>
-          <div>
-            <Label className="text-sm text-gray-600">Carrera Base</Label>
-            <p className="text-sm">{docente?.carreraBase}</p>
           </div>
           <div>
             <Label className="text-sm text-gray-600">Nivel Docente</Label>

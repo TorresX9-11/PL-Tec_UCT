@@ -408,6 +408,16 @@ function FilaCuota({
   const { cuota, docente, boleta } = row;
   const estadoBoleta = cuota.boletaEstado ?? 'Inexistente';
   const tieneBoleta = !!boleta;
+
+  const [tieneMensaje, setTieneMensaje] = useState(() => {
+    const msg = loadMensajes(docente.id);
+    return Boolean(msg[cuota.id]);
+  });
+
+  useEffect(() => {
+    return subscribeMensajes(docente.id, (m) => setTieneMensaje(Boolean(m[cuota.id])));
+  }, [docente.id, cuota.id]);
+
   return (
     <TableRow>
       <TableCell>
@@ -462,10 +472,13 @@ function FilaCuota({
           <Button
             variant="ghost"
             size="sm"
-            title="Dejar nota al docente"
+            title={tieneMensaje ? 'Editar nota' : 'Dejar nota al docente'}
             onClick={() => onAccion({ tipo: 'nota', ctx: row })}
           >
-            <MessageSquare className="h-4 w-4" />
+            <MessageSquare className={`h-4 w-4 ${tieneMensaje ? 'text-blue-600' : 'text-gray-400'}`} />
+            {tieneMensaje && (
+              <span className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600" />
+            )}
           </Button>
           <Button
             variant={cuota.estadoPago === 'Pagada' ? 'outline' : 'default'}

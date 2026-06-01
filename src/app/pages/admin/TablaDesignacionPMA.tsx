@@ -1,5 +1,5 @@
-import { useState, Fragment } from 'react';
-import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown } from 'lucide-react';
+import { useState, useEffect, Fragment } from 'react';
+import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown, Split, Trash2 } from 'lucide-react';
 import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, mockDocentesMaestros, type SeccionAsignatura } from '../../data/mockData';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -28,6 +28,12 @@ export function TablaDesignacionPMA() {
   const [expandedAsignaturas, setExpandedAsignaturas] = useState<Set<number>>(new Set());
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSeccion, setEditingSeccion] = useState<SeccionAsignatura | null>(null);
+  const [splittingSeccion, setSplittingSeccion] = useState<SeccionAsignatura | null>(null);
+
+  // Actualizar cuando cambia la vista o el mock global
+  useEffect(() => {
+    setSecciones([...mockSeccionesAsignaturas]);
+  }, []);
 
   const filteredAsignaturas = mockAsignaturas.filter((asig) => {
     const matchesSearch =
@@ -48,11 +54,11 @@ export function TablaDesignacionPMA() {
   };
 
   const getSeccionesForAsignatura = (asignaturaId: number) => {
-    return secciones.filter(s => s.asignaturaId === asignaturaId);
+    return secciones.filter((s: SeccionAsignatura) => s.asignaturaId === asignaturaId);
   };
 
   const toggleExpanded = (asignaturaId: number) => {
-    setExpandedAsignaturas(prev => {
+    setExpandedAsignaturas((prev: Set<number>) => {
       const newSet = new Set(prev);
       if (newSet.has(asignaturaId)) {
         newSet.delete(asignaturaId);
@@ -87,20 +93,79 @@ export function TablaDesignacionPMA() {
   const handleUpdateSeccion = (updatedSeccion: SeccionAsignatura) => {
     if (updatedSeccion.id < 0) {
       // Nueva sección: asignar id real y agregar al listado
-      const nuevoId = secciones.length > 0 ? Math.max(...secciones.map(s => s.id)) + 1 : 1;
-      setSecciones([...secciones, { ...updatedSeccion, id: nuevoId }]);
+      const nuevoId = mockSeccionesAsignaturas.length > 0 ? Math.max(...mockSeccionesAsignaturas.map(s => s.id)) + 1 : 1;
+      const nueva = { ...updatedSeccion, id: nuevoId };
+      mockSeccionesAsignaturas.push(nueva);
+      setSecciones([...mockSeccionesAsignaturas]);
       toast.success('Sección creada y docente asignado');
     } else {
-      setSecciones(secciones.map(s => s.id === updatedSeccion.id ? updatedSeccion : s));
+      const index = mockSeccionesAsignaturas.findIndex(s => s.id === updatedSeccion.id);
+      if (index >= 0) {
+        mockSeccionesAsignaturas[index] = updatedSeccion;
+      }
+      setSecciones([...mockSeccionesAsignaturas]);
       toast.success('Asignación actualizada exitosamente');
     }
     setEditingSeccion(null);
     setOpenDialog(false);
   };
 
+  const handleSplitSeccion = (seccion: SeccionAsignatura, partes: number) => {
+    const index = mockSeccionesAsignaturas.findIndex(s => s.id === seccion.id);
+    if (index === -1) return;
+
+    // Modificar la original para que sea 'A'
+    const seccionOriginal = { ...seccion, subGrupo: 'A' };
+    mockSeccionesAsignaturas[index] = seccionOriginal;
+
+    // Crear las nuevas partes B, C, etc.
+    const letras = ['B', 'C', 'D', 'E', 'F'];
+    const nuevasSecciones: SeccionAsignatura[] = [];
+    
+    let maxId = Math.max(...mockSeccionesAsignaturas.map(s => s.id));
+    
+    for (let i = 0; i < partes - 1; i++) {
+      maxId++;
+      nuevasSecciones.push({
+        ...seccion,
+        id: maxId,
+        subGrupo: letras[i],
+        docenteId: undefined, // El nuevo grupo nace sin docente
+      });
+    }
+
+    mockSeccionesAsignaturas.push(...nuevasSecciones);
+    setSecciones([...mockSeccionesAsignaturas]);
+    setSplittingSeccion(null);
+    toast.success(`Sección dividida en ${partes} grupos exitosamente`);
+  };
+
+  const handleDeleteSeccion = (id: number) => {
+    if (confirm('¿Está seguro de eliminar esta sección/grupo?')) {
+      const index = mockSeccionesAsignaturas.findIndex(s => s.id === id);
+      if (index === -1) return;
+      
+      const seccionEliminada = mockSeccionesAsignaturas[index];
+      mockSeccionesAsignaturas.splice(index, 1);
+
+      // Si era un subgrupo, verificamos si quedó solo el 'A' para limpiarlo
+      if (seccionEliminada.subGrupo) {
+        const remaining = mockSeccionesAsignaturas.filter(
+          s => s.asignaturaId === seccionEliminada.asignaturaId && s.seccion === seccionEliminada.seccion
+        );
+        if (remaining.length === 1 && remaining[0].subGrupo === 'A') {
+          remaining[0].subGrupo = undefined;
+        }
+      }
+
+      setSecciones([...mockSeccionesAsignaturas]);
+      toast.success('Sección eliminada exitosamente');
+    }
+  };
+
   // Count stats
   const totalSecciones = secciones.length;
-  const seccionesAsignadas = secciones.filter(s => s.docenteId).length;
+  const seccionesAsignadas = secciones.filter((s: SeccionAsignatura) => s.docenteId).length;
   const seccionesSinAsignar = totalSecciones - seccionesAsignadas;
 
   return (
@@ -153,7 +218,7 @@ export function TablaDesignacionPMA() {
                 <Input
                   placeholder="Buscar por nombre, código o sigla..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -209,7 +274,7 @@ export function TablaDesignacionPMA() {
                   const carrera = getCarrera(asignatura.carreraId);
                   const seccionesAsig = getSeccionesForAsignatura(asignatura.id);
                   const isExpanded = expandedAsignaturas.has(asignatura.id);
-                  const hasMultipleSecciones = asignatura.lineasIngreso > 1;
+                  const hasMultipleSecciones = seccionesAsig.length > 1;
 
                   // Show first section in main row
                   const primeraSeccion = seccionesAsig[0];
@@ -250,7 +315,7 @@ export function TablaDesignacionPMA() {
                         </TableCell>
                         <TableCell className="font-mono text-sm">{asignatura.sigla}</TableCell>
                         <TableCell>
-                          {primeraSeccion ? `Sección ${primeraSeccion.seccion}` : '-'}
+                          {primeraSeccion ? `Sección ${primeraSeccion.seccion}${primeraSeccion.subGrupo ? `-${primeraSeccion.subGrupo}` : ''}` : '-'}
                         </TableCell>
                         <TableCell>
                           {primeraSeccion ? (
@@ -288,29 +353,41 @@ export function TablaDesignacionPMA() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title={
-                              !primeraSeccion
-                                ? 'Crear sección y asignar docente'
-                                : docente
-                                  ? 'Editar asignación'
-                                  : 'Asignar docente'
-                            }
-                            onClick={() =>
-                              primeraSeccion
-                                ? handleAsignarDocente(primeraSeccion)
-                                : handleCrearPrimeraSeccion(asignatura.id)
-                            }
-                          >
-                            {docente ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                          </Button>
+                          <div className="flex gap-2">
+                            {primeraSeccion && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Dividir en subgrupos"
+                                onClick={() => setSplittingSeccion(primeraSeccion)}
+                              >
+                                <Split className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title={
+                                !primeraSeccion
+                                  ? 'Crear sección y asignar docente'
+                                  : docente
+                                    ? 'Editar asignación'
+                                    : 'Asignar docente'
+                              }
+                              onClick={() =>
+                                primeraSeccion
+                                  ? handleAsignarDocente(primeraSeccion)
+                                  : handleCrearPrimeraSeccion(asignatura.id)
+                              }
+                            >
+                              {docente ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
 
                       {/* Additional sections (expanded) */}
-                      {isExpanded && hasMultipleSecciones && seccionesAsig.slice(1).map((seccion) => {
+                      {isExpanded && hasMultipleSecciones && seccionesAsig.slice(1).map((seccion: SeccionAsignatura) => {
                         const docenteSeccion = getDocente(seccion.docenteId);
                         return (
                           <TableRow key={seccion.id} className="bg-gray-50">
@@ -321,7 +398,7 @@ export function TablaDesignacionPMA() {
                             <TableCell></TableCell>
                             <TableCell></TableCell>
                             <TableCell></TableCell>
-                            <TableCell>Sección {seccion.seccion}</TableCell>
+                            <TableCell>Sección {seccion.seccion}{seccion.subGrupo ? `-${seccion.subGrupo}` : ''}</TableCell>
                             <TableCell>
                               {docenteSeccion ? (
                                 <span className="font-medium">{docenteSeccion.nombreCompleto}</span>
@@ -350,13 +427,31 @@ export function TablaDesignacionPMA() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleAsignarDocente(seccion)}
-                              >
-                                {docenteSeccion ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Dividir en subgrupos"
+                                  onClick={() => setSplittingSeccion(seccion)}
+                                >
+                                  <Split className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleAsignarDocente(seccion)}
+                                >
+                                  {docenteSeccion ? <Edit className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Eliminar"
+                                  onClick={() => handleDeleteSeccion(seccion.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -371,7 +466,7 @@ export function TablaDesignacionPMA() {
       </Card>
 
       {/* Asignar Docente Dialog */}
-      <Dialog open={openDialog} onOpenChange={(open) => {
+      <Dialog open={openDialog} onOpenChange={(open: boolean) => {
         setOpenDialog(open);
         if (!open) setEditingSeccion(null);
       }}>
@@ -381,7 +476,7 @@ export function TablaDesignacionPMA() {
             <DialogDescription>
               {editingSeccion && (
                 <>
-                  {mockAsignaturas.find(a => a.id === editingSeccion.asignaturaId)?.nombre} - Sección {editingSeccion.seccion}
+                  {mockAsignaturas.find(a => a.id === editingSeccion.asignaturaId)?.nombre} - Sección {editingSeccion.seccion}{editingSeccion.subGrupo ? `-${editingSeccion.subGrupo}` : ''}
                 </>
               )}
             </DialogDescription>
@@ -398,7 +493,75 @@ export function TablaDesignacionPMA() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Split Section Dialog */}
+      <Dialog open={splittingSeccion !== null} onOpenChange={(open: boolean) => {
+        if (!open) setSplittingSeccion(null);
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Dividir Sección</DialogTitle>
+            <DialogDescription>
+              {splittingSeccion && (
+                <>
+                  ¿En cuántos grupos deseas dividir la <strong>Sección {splittingSeccion.seccion}{splittingSeccion.subGrupo ? `-${splittingSeccion.subGrupo}` : ''}</strong>?
+                  <br /><br />
+                  Las horas PMA ({splittingSeccion.horasP}P / {splittingSeccion.horasM}M / {splittingSeccion.horasA}A) se clonarán para cada nuevo grupo.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {splittingSeccion && (
+            <FormularioSplit
+              onClose={() => setSplittingSeccion(null)}
+              onSave={(partes) => handleSplitSeccion(splittingSeccion, partes)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+interface FormularioSplitProps {
+  onClose: () => void;
+  onSave: (partes: number) => void;
+}
+
+function FormularioSplit({ onClose, onSave }: FormularioSplitProps) {
+  const [partes, setPartes] = useState(2);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (partes < 2 || partes > 5) {
+      toast.error('Puedes dividir la sección entre 2 y 5 grupos');
+      return;
+    }
+    onSave(partes);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+      <div>
+        <Label htmlFor="partes">Cantidad de grupos resultantes</Label>
+        <Input
+          id="partes"
+          type="number"
+          min="2"
+          max="5"
+          value={partes}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartes(parseInt(e.target.value) || 2)}
+        />
+      </div>
+      <div className="flex gap-3 pt-4">
+        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+          Cancelar
+        </Button>
+        <Button type="submit" className="flex-1">
+          Dividir
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -517,7 +680,7 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
             type="number"
             min="0"
             value={formData.horasP}
-            onChange={(e) => setFormData({ ...formData, horasP: Number(e.target.value) })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasP: Number(e.target.value) })}
           />
         </div>
         <div>
@@ -527,7 +690,7 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
             type="number"
             min="0"
             value={formData.horasM}
-            onChange={(e) => setFormData({ ...formData, horasM: Number(e.target.value) })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasM: Number(e.target.value) })}
           />
         </div>
         <div>
@@ -537,7 +700,7 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
             type="number"
             min="0"
             value={formData.horasA}
-            onChange={(e) => setFormData({ ...formData, horasA: Number(e.target.value) })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, horasA: Number(e.target.value) })}
           />
         </div>
       </div>
