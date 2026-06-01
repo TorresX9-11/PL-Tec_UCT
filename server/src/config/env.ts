@@ -20,7 +20,17 @@ const EnvSchema = z.object({
   DB_NAME: z.string().default('plataforma'),
   DB_CONNECTION_LIMIT: z.coerce.number().int().positive().default(10),
 
-  JWT_SECRET: z.string().min(16, 'JWT_SECRET debe tener al menos 16 caracteres'),
+  JWT_SECRET: z
+    .string()
+    .min(32, 'JWT_SECRET debe tener al menos 32 caracteres')
+    .refine(
+      (val) => !val.includes('change-me'),
+      'JWT_SECRET no puede ser el valor por defecto. Genera uno fuerte con: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"',
+    )
+    .refine(
+      (val) => !/^[a-zA-Z]+$/.test(val),
+      'JWT_SECRET debe incluir números y/o caracteres especiales para mayor seguridad',
+    ),
   JWT_EXPIRES_IN: z.string().default('8h'),
 });
 

@@ -27,7 +27,10 @@ pnpm install --ignore-scripts
 
 # 2. Copiar variables de entorno y editarlas
 copy .env.example .env
-# Editar .env: DB_PASSWORD, JWT_SECRET (al menos 16 chars).
+# Editar .env: DB_PASSWORD, JWT_SECRET (REQUERIDO: mínimo 32 caracteres, debe incluir números y/o caracteres especiales)
+# Generar JWT_SECRET fuerte ejecutando:
+#   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+# Copia el resultado y pégalo en .env después de JWT_SECRET=
 
 # 3. Asegurarte de que la BD `plataforma` existe (definida en /database/schema.sql)
 #    Si aún no, importarla en MariaDB:
@@ -141,8 +144,102 @@ router.post('/', requireAuth, requireLevel('admin'), asyncHandler(carreras.creat
 
 ## 9. Pendientes (próximas tareas)
 
-- [ ] Replicar la plantilla para los 9 recursos restantes (`cursos`, `grupos`, `docentes`, `propuestas`, `pagos`, `archivos`, `capacitaciones`, `coordinadores`, `usuarios`).
-- [ ] Endpoint `/auth/login` con bcrypt + `signToken`.
-- [ ] Aplicar `requireAuth` + `requireLevel` a rutas según matriz de permisos.
-- [ ] Tests (vitest + supertest) — un test por recurso.
-- [ ] Migrar contraseñas de `usuarios.contrasena` (VARCHAR 32, parece texto plano) a hash bcrypt — coordinar con el cliente.
+- [x] Replicar la plantilla para los 9 recursos restantes (`cursos`, `grupos`, `docentes`, `propuestas`, `pagos`, `archivos`, `capacitaciones`, `coordinadores`, `usuarios`). ✅ COMPLETADO
+- [x] Endpoint `/auth/login` con bcrypt + `signToken`. ✅ COMPLETADO
+- [x] Aplicar `requireAuth` a rutas de escritura (POST, PUT, DELETE). ✅ COMPLETADO
+- [x] Migrar contraseñas a bcrypt. ✅ COMPLETADO
+  - Actualizado `usuarios.contrasena` en schema.sql de VARCHAR(32) a VARCHAR(255)
+  - Controller auth usa bcrypt.compare con fallback para contraseñas antiguas en texto plano
+  - Controller usuarios hashea contraseñas con bcrypt.hash en create y update
+- [x] Aplicar `requireLevel` a rutas según matriz de permisos. ✅ COMPLETADO
+  - Recursos críticos (usuarios, docentes, cursos, grupos, propuestas, pagos, carreras): POST/PUT → admin + coordinador, DELETE → admin
+  - Recursos secundarios (archivos, capacitaciones, coordinadores): POST/PUT/DELETE → cualquier usuario autenticado
+- [ ] Tests (vitest + supertest) — pendiente para próxima sesión.
+
+---
+
+## 10. RESUMEN FINAL - ESTADO DEL BACKEND
+
+### ✅ COMPLETADO (Sprint 1-3)
+
+**Infraestructura**:
+- ✅ Arquitectura Layered (config → middleware → routes → controllers → services → db)
+- ✅ Validación de entrada con Zod
+- ✅ Manejo centralizado de errores (HttpError + errorHandler)
+- ✅ Prepared statements (SQL injection prevention)
+- ✅ Middleware de autenticación JWT
+- ✅ Middleware de autorización por roles (requireAuth, requireLevel)
+- ✅ CORS, Helmet, Morgan configurados
+- ✅ Variables de entorno validadas con Zod
+
+**Recursos CRUD** (10 recursos):
+- ✅ carreras
+- ✅ usuarios
+- ✅ docentes
+- ✅ cursos (con PK compuesta)
+- ✅ grupos
+- ✅ propuestas
+- ✅ pagos
+- ✅ archivos
+- ✅ capacitaciones
+- ✅ coordinadores
+
+**Autenticación & Seguridad**:
+- ✅ Endpoint `/auth/login` con JWT
+- ✅ Contraseñas hasheadas con bcrypt (salt rounds: 10)
+- ✅ JWT_SECRET fuerte validado (mínimo 32 caracteres)
+- ✅ Fallback para contraseñas antiguas en texto plano (migración gradual)
+- ✅ Rutas de escritura protegidas con `requireAuth`
+- ✅ Rutas críticas protegidas con `requireLevel` (admin, coordinador)
+
+### 📋 PENDIENTE (Sprint 4+)
+
+**Testing** (próxima sesión):
+- [ ] Configurar Vitest + Supertest
+- [ ] Tests para los 10 recursos (carreras, usuarios, docentes, cursos, grupos, propuestas, pagos, archivos, capacitaciones, coordinadores)
+- [ ] Tests de integración para flujos complejos (ej: crear propuesta → crear pago)
+- [ ] Tests de errores y edge cases
+
+**Mejoras Futuras**:
+- [ ] Rate limiting (express-rate-limit)
+- [ ] Campos audit (created_at, updated_at, created_by, updated_by)
+- [ ] Logging estructurado (winston o pino)
+- [ ] Migraciones de BD (knex o typeorm)
+- [ ] Documentación Swagger/OpenAPI
+- [ ] Validación de archivos (tipo, tamaño)
+- [ ] Paginación en endpoints GET
+- [ ] Filtros y búsqueda avanzada
+- [ ] Soft deletes
+- [ ] Versionado de API (/api/v2, etc.)
+
+**Producción**:
+- [ ] PM2 para process management
+- [ ] HTTPS/TLS
+- [ ] Docker + docker-compose
+- [ ] CI/CD (GitHub Actions, GitLab CI)
+- [ ] Monitoreo y alertas
+- [ ] Backup automático de BD
+
+---
+
+## 11. Cómo continuar
+
+### Para ejecutar el backend:
+```bash
+cd server
+pnpm install
+pnpm dev
+```
+
+### Para agregar un nuevo recurso:
+1. Crear schema en `src/schemas/<recurso>.schema.ts`
+2. Crear service en `src/services/<recurso>.service.ts`
+3. Crear controller en `src/controllers/<recurso>.controller.ts`
+4. Crear router en `src/routes/<recurso>.ts`
+5. Montar router en `src/routes/index.ts`
+
+### Para cambiar permisos de una ruta:
+Editar `src/routes/<recurso>.ts` y ajustar `requireLevel()`:
+```ts
+router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(handler));
+```

@@ -1,5 +1,15 @@
 import { Router } from 'express';
 import carrerasRouter from './carreras.js';
+import usuariosRouter from './usuarios.js';
+import docentesRouter from './docentes.js';
+import cursosRouter from './cursos.js';
+import gruposRouter from './grupos.js';
+import propuestasRouter from './propuestas.js';
+import pagosRouter from './pagos.js';
+import archivosRouter from './archivos.js';
+import capacitacionesRouter from './capacitaciones.js';
+import coordinadoresRouter from './coordinadores.js';
+import authRouter from './auth.js';
 
 /**
  * Router raíz para `/api/v1`.
@@ -18,17 +28,15 @@ apiRouter.get('/health', (_req, res) => {
 });
 
 apiRouter.use('/carreras', carrerasRouter);
-
-// TODO: montar al implementarse
-// apiRouter.use('/cursos', cursosRouter);
-// apiRouter.use('/grupos', gruposRouter);
-// apiRouter.use('/docentes', docentesRouter);
-// apiRouter.use('/propuestas', propuestasRouter);
-// apiRouter.use('/pagos', pagosRouter);
-// apiRouter.use('/archivos', archivosRouter);
-// apiRouter.use('/capacitaciones', capacitacionesRouter);
-// apiRouter.use('/coordinadores', coordinadoresRouter);
-// apiRouter.use('/usuarios', usuariosRouter);
-// apiRouter.use('/auth', authRouter);
+apiRouter.use('/usuarios', usuariosRouter);
+apiRouter.use('/docentes', docentesRouter);
+apiRouter.use('/cursos', cursosRouter);
+apiRouter.use('/grupos', gruposRouter);
+apiRouter.use('/propuestas', propuestasRouter);
+apiRouter.use('/pagos', pagosRouter);
+apiRouter.use('/archivos', archivosRouter);
+apiRouter.use('/capacitaciones', capacitacionesRouter);
+apiRouter.use('/coordinadores', coordinadoresRouter);
+apiRouter.use('/auth', authRouter);
 
 export default apiRouter;
