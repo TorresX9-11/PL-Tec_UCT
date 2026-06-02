@@ -118,7 +118,55 @@ Archivos en `src/app/pages/admin/` que el usuario aún no expone:
 
 ---
 
-## 8. Pendientes / TODO
+## 8. Tests Implementados (Tarea 2.5)
+
+### Backend Testing (2026-06-02)
+Se implementó suite completa de tests de integración para el backend Express:
+
+**Stack de testing:**
+- **Vitest** - Framework de testing
+- **Supertest** - HTTP assertions
+- **Cobertura** - v8 provider
+
+**Estructura:**
+```
+server/tests/
+├── helpers/
+│   ├── app.ts          # Factory Express para tests
+│   ├── auth.ts         # Generadores JWT
+│   └── setup.ts        # Configuración global + .env.test
+└── integration/
+    ├── health.test.ts      ✅
+    ├── auth.test.ts        ✅
+    ├── carreras.test.ts    ✅
+    ├── usuarios.test.ts    ✅
+    ├── docentes.test.ts    ✅
+    ├── cursos.test.ts      ✅
+    ├── grupos.test.ts      ✅
+    ├── propuestas.test.ts  ✅
+    ├── pagos.test.ts       ✅
+    ├── archivos.test.ts    ✅
+    ├── capacitaciones.test.ts ✅
+    └── coordinadores.test.ts  ✅
+```
+
+**Scripts disponibles:**
+```bash
+cd server
+pnpm test           # Ejecutar tests
+pnpm test:watch     # Modo watch
+pnpm test:coverage  # Con cobertura
+```
+
+**Archivos creados:**
+- `server/vitest.config.ts` - Configuración Vitest
+- `server/.env.test` - Variables de entorno para tests
+- `server/TESTS.md` - Documentación de resultados
+- `server/package.json` - Scripts y dependencias actualizadas
+
+---
+
+## 9. Pendientes / TODO
 
 - [ ] Recibir BD definitiva del cliente.
 - [ ] Definir qué hacer con las páginas huérfanas (enrutar vs eliminar vs fusionar).
@@ -133,7 +181,7 @@ Archivos en `src/app/pages/admin/` que el usuario aún no expone:
 
 ---
 
-## 9. Cómo continuar entre chats
+## 10. Cómo continuar entre chats
 
 1. Abre **`P_LAB_TEC`** como workspace en Windsurf (no `LAB_TEC`).
 2. Empieza el chat pidiéndole a Cascade: *"Lee `PROGRESO.md` y continuemos."*
