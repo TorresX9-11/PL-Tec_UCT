@@ -10,6 +10,7 @@ import { CarrerasAsignaturas } from './pages/admin/CarrerasAsignaturas';
 import { DocentesTable } from './pages/admin/DocentesTable';
 import { Reportes } from './pages/admin/Reportes';
 import { CorreosMasivos } from './pages/admin/CorreosMasivos';
+import { Coordinadores } from './pages/admin/Coordinadores';
 import { AcademicDashboard } from './pages/academic/AcademicDashboard';
 import { PlataformaDocentes } from './pages/academic/PlataformaDocentes';
 import { GestionAcademica } from './pages/academic/GestionAcademica';
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'carreras-asignaturas', Component: CarrerasAsignaturas },
       { path: 'docentes', Component: DocentesTable },
+      { path: 'coordinadores', Component: Coordinadores },
       { path: 'reportes', Component: Reportes },
       { path: 'correos-masivos', Component: CorreosMasivos },
     ],

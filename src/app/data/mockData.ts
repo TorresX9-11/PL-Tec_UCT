@@ -850,3 +850,50 @@ export function getCuotasAdmin(
   }
   return out;
 }
+
+// ============================================================================
+// Coordinadores (Perfil de Administrador de Coordinadores)
+// ============================================================================
+
+/**
+ * Catálogo de carreras disponibles (código → nombre) para los Selects del
+ * módulo de coordinadores. El `id_carrera` mapea a la columna `carreras.id_carrera`
+ * de la BD (máx. 4 chars).
+ */
+export interface CarreraDisponible {
+  id_carrera: string;
+  nombre: string;
+}
+
+export const mockCarrerasDisponibles: CarreraDisponible[] = [
+  { id_carrera: 'GADE', nombre: 'T.U. G. y Admin. Emp.' },
+  { id_carrera: 'EENE', nombre: 'T.U. Elect. y Efi. Ener.' },
+  { id_carrera: 'EDPA', nombre: 'T.U. Edu. Parv. y NB1' },
+  { id_carrera: 'PROA', nombre: 'T.U. Prod. Agro. Sost.' },
+  { id_carrera: 'INFO', nombre: 'T.U. Informática' },
+  { id_carrera: 'EDDI', nombre: 'T.U. Edu. Dífer.' },
+  { id_carrera: 'EPAV', nombre: 'T.U. Edu. Parv. NB1 V.' },
+  { id_carrera: 'EEEV', nombre: 'T.U. Ele. y Efi. Ener. V.' },
+  { id_carrera: 'GAEV', nombre: 'T.U. G. y Adm. Emp. V.' },
+  { id_carrera: 'INFV', nombre: 'T.U. Informática V.' },
+];
+
+/** Devuelve el nombre legible de una carrera a partir de su código. */
+export function getNombreCarrera(idCarrera: string | null): string | null {
+  if (!idCarrera) return null;
+  return mockCarrerasDisponibles.find(c => c.id_carrera === idCarrera)?.nombre ?? idCarrera;
+}
+
+export interface Coordinador {
+  id_coordinador: number;
+  nombre: string;
+  correo_usuario: string | null;
+  id_carrera: string | null;
+  tieneCredenciales: boolean;
+}
+
+export const mockCoordinadores: Coordinador[] = [
+  { id_coordinador: 1, nombre: 'María González', correo_usuario: 'mgonzalez@uct.cl', id_carrera: 'GADE', tieneCredenciales: true },
+  { id_coordinador: 2, nombre: 'Carlos Pérez',   correo_usuario: null,                id_carrera: 'EDPA', tieneCredenciales: false },
+  { id_coordinador: 3, nombre: 'Ana Rodríguez',  correo_usuario: 'arodriguez@uct.cl', id_carrera: null,   tieneCredenciales: true },
+];

@@ -117,12 +117,20 @@ describe('Coordinadores Endpoints', () => {
       expect(response.status).toBe(401);
     });
 
-    it('cualquier usuario autenticado puede eliminar coordinadores', async () => {
+    it('debe retornar 403 para usuario autenticado no admin', async () => {
       const response = await request(app)
         .delete('/api/v1/coordinadores/99')
         .set(authHeader(testTokens.coordinador));
 
-      expect([200, 404, 409]).toContain(response.status);
+      expect(response.status).toBe(403);
+    });
+
+    it('admin puede eliminar coordinadores', async () => {
+      const response = await request(app)
+        .delete('/api/v1/coordinadores/99')
+        .set(authHeader(testTokens.admin));
+
+      expect([200, 204, 404, 409]).toContain(response.status);
     });
   });
 });

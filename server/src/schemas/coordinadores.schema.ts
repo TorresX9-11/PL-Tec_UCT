@@ -40,3 +40,32 @@ export type UpdateCoordinadorInput = z.infer<typeof UpdateCoordinadorSchema>;
 export const CoordinadorIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
+
+/**
+ * Body para POST /coordinadores/:id/credenciales.
+ * Crea o actualiza el usuario asociado (nivel 'coordinador') del coordinador.
+ */
+export const GestionarCredencialesSchema = z.object({
+  correo_usuario: z.string().email().max(32),
+  nombre: z.string().trim().min(1).max(128),
+  contrasena: z.string().min(8).max(255),
+});
+export type GestionarCredencialesInput = z.infer<typeof GestionarCredencialesSchema>;
+
+/**
+ * Body para POST /coordinadores/:id/reset-password.
+ * Resetea únicamente la contraseña del usuario asociado.
+ */
+export const ResetPasswordSchema = z.object({
+  contrasena: z.string().min(8).max(255),
+});
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+
+/**
+ * Body para PUT /coordinadores/:id/carrera.
+ * `id_carrera` null para desasignar la carrera del coordinador.
+ */
+export const AsignarCarreraSchema = z.object({
+  id_carrera: z.string().trim().max(4).nullable(),
+});
+export type AsignarCarreraInput = z.infer<typeof AsignarCarreraSchema>;
