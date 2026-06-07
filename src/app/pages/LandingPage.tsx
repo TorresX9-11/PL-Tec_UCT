@@ -37,7 +37,7 @@ export function LandingPage() {
                 <Users className="h-7 w-7" />
               </div>
               <h3 className="mb-2 text-xl font-bold text-gray-900">
-                RRHH / Pagos
+                Administración
               </h3>
               <p className="mb-4 text-sm text-gray-600">
                 Gestión de pagos y propuestas docentes
