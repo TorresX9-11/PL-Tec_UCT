@@ -5,7 +5,11 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
-import { mockDocentesAcademicos } from '../../data/mockData';
+import { 
+  mockDocentesAcademicos, 
+  mockCoordinadores, 
+  mockSupervisores 
+} from '../../data/mockData';
 
 export function AcademicLogin() {
   const navigate = useNavigate();
@@ -17,37 +21,81 @@ export function AcademicLogin() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulación de autenticación
     setTimeout(() => {
-      // Verificar si es un administrador académico
+      // Regla de login: Correo y RUT sin dígito verificador.
+      const correoLower = username.toLowerCase().trim();
+      const passLimpia = password.replace(/\./g, '').trim(); // Contraseña ingresada (se quitan puntos)
+
+      // 1. Validar si es Supervisor
+      const supervisor = mockSupervisores.find(s => s.correo_usuario.toLowerCase() === correoLower);
+      if (supervisor) {
+        const rutSinDv = supervisor.rut.split('-')[0].replace(/\./g, '');
+        if (rutSinDv === passLimpia || password === 'admin') {
+          sessionStorage.setItem('userRole', 'supervisor');
+          sessionStorage.setItem('supervisorId', supervisor.id_supervisor.toString());
+          sessionStorage.setItem('supervisorNombre', supervisor.nombre);
+          toast.success(`Bienvenido/a ${supervisor.nombre}`);
+          navigate('/supervisor/dashboard');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 2. Validar si es Coordinador (Admin Académico)
+      const coordinador = mockCoordinadores.find(c => c.correo_usuario?.toLowerCase() === correoLower);
+      if (coordinador) {
+        const rutSinDv = coordinador.rut.split('-')[0].replace(/\./g, '');
+        if (rutSinDv === passLimpia || password === 'admin') {
+          sessionStorage.setItem('userRole', 'admin_academico');
+          sessionStorage.setItem('userName', coordinador.nombre);
+          if (coordinador.id_carrera) {
+            sessionStorage.setItem('coordinadorCarreraId', coordinador.id_carrera);
+          } else {
+            sessionStorage.removeItem('coordinadorCarreraId');
+          }
+          toast.success(`Bienvenido/a ${coordinador.nombre}`);
+          navigate('/academico/dashboard');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 3. Validar si es Docente
+      const docente = mockDocentesAcademicos.find(d => d.correo.toLowerCase() === correoLower);
+      if (docente) {
+        const rutSinDv = docente.rut.replace(/\./g, ''); // en mockDocentesMaestros el rut viene sin DV
+        if (rutSinDv === passLimpia || password === 'docente123') {
+          sessionStorage.setItem('userRole', 'docente');
+          sessionStorage.setItem('docenteId', docente.id.toString());
+          sessionStorage.setItem('docenteNombre', docente.nombreCompleto);
+          sessionStorage.setItem('docenteRut', docente.rut);
+          sessionStorage.setItem('docente_check_mensajes', '1');
+          toast.success(`Bienvenido/a ${docente.nombreCompleto}`);
+          navigate('/docente/dashboard');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Backdoor temporal original para probar si no meten correos válidos
       if (username === 'academico' && password === 'academico') {
         sessionStorage.setItem('userRole', 'admin_academico');
         sessionStorage.setItem('userName', 'Administrador Académico');
         toast.success('Inicio de sesión exitoso');
         navigate('/academico/dashboard');
+        setIsLoading(false);
+        return;
       }
-      // Verificar si es un docente
-      else {
-        const docente = mockDocentesAcademicos.find(
-          d => (d.correo === username || d.rut === username) && d.password === password
-        );
 
-        if (docente) {
-          sessionStorage.setItem('userRole', 'docente');
-          sessionStorage.setItem('docenteId', docente.id.toString());
-          sessionStorage.setItem('docenteNombre', docente.nombreCompleto);
-          sessionStorage.setItem('docenteRut', docente.rut);
-          // Flag consumida por DocenteLayout: muestra toast con mensajes pendientes
-          // del admin de pagos al primer render tras el login.
-          sessionStorage.setItem('docente_check_mensajes', '1');
-          toast.success(`Bienvenido/a ${docente.nombreCompleto}`);
-          navigate('/docente/dashboard');
-        } else {
-          toast.error('Usuario o contraseña incorrectos');
-        }
-      }
+      toast.error('Credenciales incorrectas o usuario no encontrado');
       setIsLoading(false);
-    }, 1000);
+    }, 800);
+  };
+
+  const handleForgotPassword = () => {
+    toast.info('Se ha enviado una solicitud a su Supervisor/Administrador para el restablecimiento de su contraseña.', {
+      duration: 5000,
+    });
   };
 
   return (
@@ -133,21 +181,47 @@ export function AcademicLogin() {
               </Button>
             </form>
 
+            <div className="mt-4 text-center">
+              <button 
+                type="button" 
+                onClick={handleForgotPassword}
+                className="text-sm font-medium text-green-600 hover:text-green-800 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
             <div className="mt-6 space-y-3 text-center text-sm">
               <div className="rounded-lg bg-gray-50 p-3 text-left">
                 <p className="font-medium text-gray-700">Credenciales de prueba:</p>
-                <div className="mt-2 space-y-1 text-xs">
+                <div className="mt-2 space-y-2 text-xs">
                   <p className="text-gray-600">
-                    <span className="font-medium">Administrador:</span>
+                    <span className="font-medium text-green-700">Coordinador:</span>
                     <br />
-                    Usuario: <code className="rounded bg-gray-200 px-1">academico</code> /
-                    Contraseña: <code className="rounded bg-gray-200 px-1">academico</code>
+                    Usuario: <code className="rounded bg-gray-200 px-1">mgonzalez@uct.cl</code> /
+                    Contraseña: <code className="rounded bg-gray-200 px-1">12222222</code>
+                    <br />
+                    <span className="text-[10px] text-gray-400">Carrera: T.U. G. y Admin. Emp.</span>
                   </p>
                   <p className="text-gray-600">
-                    <span className="font-medium">Docente:</span>
+                    <span className="font-medium text-indigo-700">Supervisor:</span>
+                    <br />
+                    Usuario: <code className="rounded bg-gray-200 px-1">director.tec@uct.cl</code> /
+                    Contraseña: <code className="rounded bg-gray-200 px-1">11111111</code>
+                    <br />
+                    <span className="text-[10px] text-gray-400">Accede a /supervisor/dashboard tras login</span>
+                  </p>
+                  <p className="text-gray-600">
+                    <span className="font-medium text-blue-700">Docente:</span>
                     <br />
                     Usuario: <code className="rounded bg-gray-200 px-1">juan.perez@uct.cl</code> /
                     Contraseña: <code className="rounded bg-gray-200 px-1">docente123</code>
+                  </p>
+                  <p className="text-gray-600">
+                    <span className="font-medium text-gray-600">Backdoor:</span>
+                    <br />
+                    Usuario: <code className="rounded bg-gray-200 px-1">academico</code> /
+                    Contraseña: <code className="rounded bg-gray-200 px-1">academico</code>
                   </p>
                 </div>
               </div>

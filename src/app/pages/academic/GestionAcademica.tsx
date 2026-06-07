@@ -7,6 +7,7 @@ import {
   mockAsignaturas,
   mockCarreras,
   getRamosDocente,
+  getCarrerasByCoordinadorId,
   type EstadoValidacion,
   type DocenteAcademico
 } from '../../data/mockData';
@@ -55,7 +56,25 @@ function badgeNotas(ingresadas?: number, totales?: number) {
 
 export function GestionAcademica() {
   const navigate = useNavigate();
-  const docentes = mockDocentesAcademicos;
+  
+  const coordinadorCarreraIdStr = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId');
+  const carreraFiltradaId = coordinadorCarreraIdStr;
+
+  // Modo supervisión: el supervisor solo visualiza, no valida
+  const isReadOnly = !!sessionStorage.getItem('modoSupervision');
+
+  const docentes = useMemo(() => {
+    return mockDocentesAcademicos.filter(d => {
+      if (!carreraFiltradaId) return true; // Mostrar todos si no hay filtro de carrera
+      
+      const ramos = getRamosDocente(d.id);
+      return ramos.some(ramo => {
+        if (!ramo.carrera) return false;
+        const idsPermitidos = getCarrerasByCoordinadorId(carreraFiltradaId);
+        return idsPermitidos.includes(ramo.carrera.id);
+      });
+    });
+  }, [carreraFiltradaId]);
 
   // ─── Stats agregadas a nivel SECCIÓN (nueva fuente de verdad) ─────────────
   const stats = useMemo(() => {
@@ -381,6 +400,7 @@ export function GestionAcademica() {
                       notasTot={ramos[0].seccion.notasTotales}
                       guia={ramos[0].seccion.guiaAprendizaje}
                       onValidar={() => irValidarAcademicos(docente.id, ramos[0].seccion.id)}
+                      readOnly={isReadOnly}
                     />
                   ) : (
                     // 2+ ramos → acordeón
@@ -424,6 +444,7 @@ export function GestionAcademica() {
                                 guia={seccion.guiaAprendizaje}
                                 onValidar={() => irValidarAcademicos(docente.id, seccion.id)}
                                 hideHeader
+                                readOnly={isReadOnly}
                               />
                             </AccordionContent>
                           </AccordionItem>
@@ -442,12 +463,12 @@ export function GestionAcademica() {
                     </div>
                     <Button
                       size="sm"
-                      variant={personalesCompletos ? 'outline' : 'default'}
+                      variant={isReadOnly || personalesCompletos ? 'outline' : 'default'}
                       onClick={() => irValidarPersonales(docente.id)}
-                      className={personalesCompletos ? '' : 'bg-blue-600 hover:bg-blue-700'}
+                      className={isReadOnly || personalesCompletos ? '' : 'bg-blue-600 hover:bg-blue-700'}
                     >
                       <FileCheck className="mr-1.5 h-4 w-4" />
-                      Validar archivos personales
+                      {isReadOnly ? 'Ver detalle' : 'Validar archivos personales'}
                       <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -485,6 +506,7 @@ function RamoBloque(props: {
   guia?: EstadoValidacion;
   onValidar: () => void;
   hideHeader?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -510,13 +532,15 @@ function RamoBloque(props: {
           {badgeEstado(props.guia)}
         </div>
       </div>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={props.onValidar} className="bg-green-600 hover:bg-green-700">
-          <FileCheck className="mr-1.5 h-4 w-4" />
-          Validar archivos académicos
-          <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-        </Button>
-      </div>
+      {!props.readOnly && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={props.onValidar} className="bg-green-600 hover:bg-green-700">
+            <FileCheck className="mr-1.5 h-4 w-4" />
+            Validar archivos académicos
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

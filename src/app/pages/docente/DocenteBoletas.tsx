@@ -521,6 +521,15 @@ export function DocenteBoletas() {
                       </div>
                     </div>
                   )}
+                  {boleta.estado === 'Con Observación' && boleta.observaciones && (
+                    <div className="mt-3 flex items-start gap-3 rounded bg-red-50 p-3 text-sm text-red-800 border border-red-200">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                      <div className="flex-1">
+                        <div className="font-semibold">Observación del administrador</div>
+                        <p className="mt-1 whitespace-pre-wrap">{boleta.observaciones}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })

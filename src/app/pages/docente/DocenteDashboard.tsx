@@ -60,6 +60,57 @@ export function DocenteDashboard() {
         </p>
       </div>
 
+      {/* Alerta: Boletas con observación */}
+      {docente.boletas.filter(b => b.estado === 'Con Observación').length > 0 && (
+        <Card className="border-red-300 bg-red-50">
+          <CardHeader className="flex flex-row items-start gap-3 space-y-0 pb-3">
+            <AlertCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-red-600" />
+            <div className="flex-1">
+              <CardTitle className="text-red-900">
+                {docente.boletas.filter(b => b.estado === 'Con Observación').length === 1
+                  ? '1 boleta tiene observaciones'
+                  : `${docente.boletas.filter(b => b.estado === 'Con Observación').length} boletas tienen observaciones`}
+              </CardTitle>
+              <CardDescription className="text-red-800">
+                El área administrativa ha revisado su boleta y requiere correcciones. Revise el detalle en la sección de boletas.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {docente.boletas
+                .filter(b => b.estado === 'Con Observación')
+                .map((boleta) => (
+                  <div
+                    key={boleta.id}
+                    className="flex items-center justify-between rounded-lg border border-red-200 bg-white p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100">
+                        <FileText className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{boleta.nombre}</p>
+                        {boleta.observaciones && (
+                          <p className="text-xs text-red-600 mt-0.5 max-w-md truncate">
+                            {boleta.observaciones}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      to="/docente/boletas"
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+                    >
+                      Ver detalle
+                    </Link>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Alerta: Boletas pendientes por subir */}
       {boletasPendientes.length > 0 && (
         <Card className="border-amber-300 bg-amber-50">

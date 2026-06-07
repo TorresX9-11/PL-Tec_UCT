@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, Eye, User, FileText, Award, Shield, Receipt, BookOpen } from 'lucide-react';
-import { mockDocentesAcademicos, getRamosDocente } from '../../data/mockData';
+import { mockDocentesAcademicos, getRamosDocente, getCarrerasByCoordinadorId } from '../../data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -12,27 +12,50 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 export function PlataformaDocentes() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocente, setSelectedDocente] = useState<number | null>(null);
-  const docentes = mockDocentesAcademicos;
+  const coordinadorCarreraIdStr = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId');
+  const carreraFiltradaId = coordinadorCarreraIdStr;
 
-  const filteredDocentes = docentes.filter(d =>
+  // Filtrar los docentes:
+  // Si el coordinador/supervisor tiene una carreraId asignada, solo mostrar docentes que tengan
+  // al menos una sección asignada que pertenezca a esa carrera.
+  // Sino, mostrar todos (ej. para un administrador general si se diera el caso).
+  const docentesAsignados = mockDocentesAcademicos.filter(d => {
+    if (!carreraFiltradaId) return true; // Mostrar todos si no hay filtro de carrera
+    
+    // Obtener los ramos del docente y comprobar si alguno pertenece a la carrera asignada
+    // Nota: El coordinador tiene 'id_carrera' ej: 'INFO', pero las asignaturas apuntan a 'carreraId' (number)
+    // que enlaza con mockCarreras donde el codigo puede ser 'TUI-D' o 'TUI-V'.
+    // Simplificación para la demo: Asumimos que si la carrera filtrada no coincide directamente, 
+    // buscamos si el string del id_carrera del coordinador está incluido en el código de la carrera.
+    // Ej: INFO está en TUI-D? No, TUI-D no tiene INFO. Necesitamos un mapeo o chequear por ID si tuvieran la misma estructura.
+    // Para simplificar, revisemos si el coordinador (como Ana) tiene asignaturas.
+    const ramos = getRamosDocente(d.id);
+    return ramos.some(ramo => {
+      if (!ramo.carrera) return false;
+      const idsPermitidos = getCarrerasByCoordinadorId(carreraFiltradaId);
+      return idsPermitidos.includes(ramo.carrera.id);
+    });
+  });
+
+  const filteredDocentes = docentesAsignados.filter(d =>
     d.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.rut.includes(searchTerm)
   );
 
-  const currentDocente = selectedDocente ? docentes.find(d => d.id === selectedDocente) : null;
+  const currentDocente = selectedDocente ? docentesAsignados.find(d => d.id === selectedDocente) : null;
 
   const estadisticas = {
-    totalDocentes: docentes.length,
-    documentacionCompleta: docentes.filter(
+    totalDocentes: docentesAsignados.length,
+    documentacionCompleta: docentesAsignados.filter(
       d => d.cvActualizado === 'Validado' && 
            d.certificadoTitulo === 'Validado' && 
            d.certificadoAntecedentes === 'Validado' && 
            d.certificadoInhabilidad === 'Validado'
     ).length,
-    cvActualizados: docentes.filter(d => d.cvActualizado === 'Validado').length,
-    promedioCapacitaciones: Math.round(
-      docentes.reduce((sum, d) => sum + d.capacitaciones, 0) / docentes.length
-    )
+    cvActualizados: docentesAsignados.filter(d => d.cvActualizado === 'Validado').length,
+    promedioCapacitaciones: docentesAsignados.length > 0 
+      ? Math.round(docentesAsignados.reduce((sum, d) => sum + d.capacitaciones, 0) / docentesAsignados.length)
+      : 0
   };
 
   return (

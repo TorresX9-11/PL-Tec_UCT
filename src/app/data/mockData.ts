@@ -1,24 +1,5 @@
 // Mock data para la plataforma TEC UCT
 
-export interface Docente {
-  id: number;
-  carrera: string;
-  jornada: 'Diurna' | 'Vespertina';
-  rut: string;
-  nombreCompleto: string;
-  nivelDocente: 'A' | 'B' | 'C';
-  semestre: number;
-  año: number;
-  correo: string;
-  montoTotalPropuesta: number;
-  numeroCuotas: number;
-  estado: 'Pendiente' | 'Pagado' | 'En proceso';
-  valorCuotaBruto: number;
-  boletaUrl?: string;
-  recepcionBHE: boolean;
-  saldo: number;
-}
-
 export const CARRERAS_DIURNAS = [
   'T.U. G. y Admin. Emp.',
   'T.U. Elect. y Efi. Ener.',
@@ -36,150 +17,6 @@ export const CARRERAS_VESPERTINAS = [
 ];
 
 export const TODAS_CARRERAS = [...CARRERAS_DIURNAS, ...CARRERAS_VESPERTINAS];
-
-export const mockDocentes: Docente[] = [
-  {
-    id: 1,
-    carrera: 'T.U. Informática',
-    jornada: 'Diurna',
-    rut: '12.345.678-9',
-    nombreCompleto: 'Juan Carlos Pérez González',
-    nivelDocente: 'A',
-    semestre: 1,
-    año: 2026,
-    correo: 'juan.perez@uct.cl',
-    montoTotalPropuesta: 2400000,
-    numeroCuotas: 4,
-    estado: 'Pagado',
-    valorCuotaBruto: 600000,
-    boletaUrl: '#',
-    recepcionBHE: true,
-    saldo: 0
-  },
-  {
-    id: 2,
-    carrera: 'T.U. G. y Admin. Emp.',
-    jornada: 'Diurna',
-    rut: '13.456.789-0',
-    nombreCompleto: 'María Teresa Rodríguez Silva',
-    nivelDocente: 'B',
-    semestre: 1,
-    año: 2026,
-    correo: 'maria.rodriguez@uct.cl',
-    montoTotalPropuesta: 1800000,
-    numeroCuotas: 4,
-    estado: 'En proceso',
-    valorCuotaBruto: 450000,
-    boletaUrl: '#',
-    recepcionBHE: true,
-    saldo: 900000
-  },
-  {
-    id: 3,
-    carrera: 'T.U. Informática V.',
-    jornada: 'Vespertina',
-    rut: '14.567.890-1',
-    nombreCompleto: 'Pedro Antonio Morales Castro',
-    nivelDocente: 'A',
-    semestre: 1,
-    año: 2026,
-    correo: 'pedro.morales@uct.cl',
-    montoTotalPropuesta: 2500000,
-    numeroCuotas: 5,
-    estado: 'Pendiente',
-    valorCuotaBruto: 500000,
-    recepcionBHE: false,
-    saldo: 2500000
-  },
-  {
-    id: 4,
-    carrera: 'T.U. Edu. Parv. y NB1',
-    jornada: 'Diurna',
-    rut: '15.678.901-2',
-    nombreCompleto: 'Ana Patricia Fernández López',
-    nivelDocente: 'A',
-    semestre: 1,
-    año: 2026,
-    correo: 'ana.fernandez@uct.cl',
-    montoTotalPropuesta: 2200000,
-    numeroCuotas: 4,
-    estado: 'Pagado',
-    valorCuotaBruto: 550000,
-    boletaUrl: '#',
-    recepcionBHE: true,
-    saldo: 0
-  },
-  {
-    id: 5,
-    carrera: 'T.U. Elect. y Efi. Ener.',
-    jornada: 'Diurna',
-    rut: '16.789.012-3',
-    nombreCompleto: 'Roberto José Valenzuela Muñoz',
-    nivelDocente: 'C',
-    semestre: 1,
-    año: 2026,
-    correo: 'roberto.valenzuela@uct.cl',
-    montoTotalPropuesta: 1600000,
-    numeroCuotas: 4,
-    estado: 'En proceso',
-    valorCuotaBruto: 400000,
-    boletaUrl: '#',
-    recepcionBHE: true,
-    saldo: 800000
-  },
-  {
-    id: 6,
-    carrera: 'T.U. G. y Adm. Emp. V.',
-    jornada: 'Vespertina',
-    rut: '17.890.123-4',
-    nombreCompleto: 'Carmen Gloria Sánchez Torres',
-    nivelDocente: 'A',
-    semestre: 1,
-    año: 2026,
-    correo: 'carmen.sanchez@uct.cl',
-    montoTotalPropuesta: 2750000,
-    numeroCuotas: 5,
-    estado: 'En proceso',
-    valorCuotaBruto: 550000,
-    recepcionBHE: true,
-    saldo: 1650000
-  },
-  {
-    id: 7,
-    carrera: 'T.U. Prod. Agro. Sost.',
-    jornada: 'Diurna',
-    rut: '18.901.234-5',
-    nombreCompleto: 'Luis Alberto García Ramírez',
-    nivelDocente: 'B',
-    semestre: 1,
-    año: 2026,
-    correo: 'luis.garcia@uct.cl',
-    montoTotalPropuesta: 2100000,
-    numeroCuotas: 4,
-    estado: 'Pagado',
-    valorCuotaBruto: 525000,
-    boletaUrl: '#',
-    recepcionBHE: true,
-    saldo: 0
-  },
-  {
-    id: 8,
-    carrera: 'T.U. Edu. Parv. NB1 V.',
-    jornada: 'Vespertina',
-    rut: '19.012.345-6',
-    nombreCompleto: 'Patricia Alejandra Contreras Vega',
-    nivelDocente: 'C',
-    semestre: 1,
-    año: 2026,
-    correo: 'patricia.contreras@uct.cl',
-    montoTotalPropuesta: 2000000,
-    numeroCuotas: 5,
-    estado: 'Pendiente',
-    valorCuotaBruto: 400000,
-    recepcionBHE: false,
-    saldo: 2000000
-  }
-];
 
 export type EstadoValidacion = 'Inexistente' | 'Por Revisar' | 'Validado';
 
@@ -728,11 +565,6 @@ export function getDocenteById(id: number): DocenteAcademico | undefined {
   return mockDocentesAcademicos.find(d => d.id === id);
 }
 
-/** Busca un docente (vista admin) por id. */
-export function getDocenteAdminById(id: number): Docente | undefined {
-  return mockDocentes.find(d => d.id === id);
-}
-
 /** Login: busca docente por correo/RUT + password. */
 export function getDocenteByCredenciales(login: string, password: string): DocenteAcademico | undefined {
   return mockDocentesAcademicos.find(
@@ -884,16 +716,45 @@ export function getNombreCarrera(idCarrera: string | null): string | null {
   return mockCarrerasDisponibles.find(c => c.id_carrera === idCarrera)?.nombre ?? idCarrera;
 }
 
+/** Mapeo de código de coordinador a IDs numéricos de carrera (para filtros académicos). */
+export function getCarrerasByCoordinadorId(carreraId: string): number[] {
+  const mapa: Record<string, number[]> = {
+    GADE: [2, 8],
+    EENE: [3, 9],
+    EDPA: [4, 10],
+    PROA: [5],
+    INFO: [1, 7],
+    EDDI: [6]
+  };
+  return mapa[carreraId] || [];
+}
+
 export interface Coordinador {
   id_coordinador: number;
   nombre: string;
+  rut: string;
   correo_usuario: string | null;
   id_carrera: string | null;
   tieneCredenciales: boolean;
 }
 
 export const mockCoordinadores: Coordinador[] = [
-  { id_coordinador: 1, nombre: 'María González', correo_usuario: 'mgonzalez@uct.cl', id_carrera: 'GADE', tieneCredenciales: true },
-  { id_coordinador: 2, nombre: 'Carlos Pérez',   correo_usuario: null,                id_carrera: 'EDPA', tieneCredenciales: false },
-  { id_coordinador: 3, nombre: 'Ana Rodríguez',  correo_usuario: 'arodriguez@uct.cl', id_carrera: null,   tieneCredenciales: true },
+  { id_coordinador: 1, nombre: 'María González', rut: '12.222.222-2', correo_usuario: 'mgonzalez@uct.cl', id_carrera: 'GADE', tieneCredenciales: true },
+  { id_coordinador: 2, nombre: 'Carlos Pérez',   rut: '13.333.333-3', correo_usuario: null,                id_carrera: 'EDPA', tieneCredenciales: false },
+  { id_coordinador: 3, nombre: 'Ana Rodríguez',  rut: '14.444.444-4', correo_usuario: 'arodriguez@uct.cl', id_carrera: null,   tieneCredenciales: true },
+];
+
+// ============================================================================
+// Supervisores (Nuevo perfil)
+// ============================================================================
+
+export interface Supervisor {
+  id_supervisor: number;
+  nombre: string;
+  correo_usuario: string;
+  rut: string; // para el login
+}
+
+export const mockSupervisores: Supervisor[] = [
+  { id_supervisor: 1, nombre: 'Director Área TEC', correo_usuario: 'director.tec@uct.cl', rut: '11.111.111-1' }
 ];

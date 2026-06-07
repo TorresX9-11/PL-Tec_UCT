@@ -74,17 +74,6 @@ export function AdminLayout() {
               Base de Datos
             </Link>
             <Link
-              to="/admin/coordinadores"
-              className={`flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
-                isActive('/admin/coordinadores')
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              Coordinadores
-            </Link>
-            <Link
               to="/admin/reportes"
               className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
                 isActive('/admin/reportes')

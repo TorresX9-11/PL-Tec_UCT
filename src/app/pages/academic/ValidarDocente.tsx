@@ -46,6 +46,9 @@ export function ValidarDocente() {
 
   // Modo de validación: ?tipo=personal | ?tipo=academico&seccion=X | (default: personal)
   const tipo = (searchParams.get('tipo') ?? 'personal') as 'personal' | 'academico';
+
+  // Modo supervisión: el supervisor solo puede visualizar, no modificar
+  const isReadOnly = !!sessionStorage.getItem('modoSupervision');
   const seccionIdParam = searchParams.get('seccion');
   const seccionId = seccionIdParam ? Number(seccionIdParam) : null;
 
@@ -148,9 +151,13 @@ export function ValidarDocente() {
   const porRevisar = Object.values(estados).filter(e => e === 'Por Revisar').length;
 
   // Título y descripción contextual
-  const tituloPagina = tipo === 'academico'
-    ? `Validación Académica — ${asignatura?.sigla ?? ''}`
-    : 'Validación de Archivos Personales';
+  const tituloPagina = isReadOnly
+    ? (tipo === 'academico'
+        ? `Visualización Académica — ${asignatura?.sigla ?? ''}`
+        : 'Visualización de Archivos Personales')
+    : (tipo === 'academico'
+        ? `Validación Académica — ${asignatura?.sigla ?? ''}`
+        : 'Validación de Archivos Personales');
   const descripcionPagina = tipo === 'academico' && asignatura && seccion
     ? `${asignatura.nombre} · Sección ${seccion.seccion}`
     : `${docente.nombreCompleto} · ${docente.rut}`;
@@ -177,10 +184,12 @@ export function ValidarDocente() {
             <p className="mt-1 text-sm text-gray-500">Docente: <strong>{docente.nombreCompleto}</strong> · {docente.rut}</p>
           )}
         </div>
-        <Button onClick={handleSave} size="lg">
-          <Save className="mr-2 h-5 w-5" />
-          Guardar Cambios
-        </Button>
+        {!isReadOnly && (
+          <Button onClick={handleSave} size="lg">
+            <Save className="mr-2 h-5 w-5" />
+            Guardar Cambios
+          </Button>
+        )}
       </div>
 
       {/* Resumen */}
@@ -188,9 +197,11 @@ export function ValidarDocente() {
         <CardHeader>
           <CardTitle>Estado General</CardTitle>
           <CardDescription>
-            {tipo === 'academico'
-              ? 'Resumen de validación académica para este ramo'
-              : 'Resumen de validación de documentos personales del docente'}
+            {isReadOnly
+              ? 'Visualización del estado de validación (solo lectura)'
+              : (tipo === 'academico'
+                  ? 'Resumen de validación académica para este ramo'
+                  : 'Resumen de validación de documentos personales del docente')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -244,7 +255,7 @@ export function ValidarDocente() {
                         <Select
                           value={estados[doc.key] ?? doc.estado}
                           onValueChange={(value: string) => setEstados((prev: Record<string, EstadoValidacion>) => ({ ...prev, [doc.key]: value as EstadoValidacion }))}
-                          disabled={isNotasAlDia} // las notas no se "validan", se calculan
+                          disabled={isNotasAlDia || isReadOnly}
                         >
                           <SelectTrigger id={`estado-${doc.key}`}>
                             <SelectValue />

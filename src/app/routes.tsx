@@ -10,7 +10,6 @@ import { CarrerasAsignaturas } from './pages/admin/CarrerasAsignaturas';
 import { DocentesTable } from './pages/admin/DocentesTable';
 import { Reportes } from './pages/admin/Reportes';
 import { CorreosMasivos } from './pages/admin/CorreosMasivos';
-import { Coordinadores } from './pages/admin/Coordinadores';
 import { AcademicDashboard } from './pages/academic/AcademicDashboard';
 import { PlataformaDocentes } from './pages/academic/PlataformaDocentes';
 import { GestionAcademica } from './pages/academic/GestionAcademica';
@@ -22,6 +21,11 @@ import { DocenteCV } from './pages/docente/DocenteCV';
 import { DocenteCertificados } from './pages/docente/DocenteCertificados';
 import { DocenteCapacitaciones } from './pages/docente/DocenteCapacitaciones';
 import { DocenteBoletas } from './pages/docente/DocenteBoletas';
+
+// Supervisor Imports
+import { SupervisorLayout } from './components/SupervisorLayout';
+import { SupervisorDashboard } from './pages/supervisor/SupervisorDashboard';
+import { Coordinadores } from './pages/supervisor/Coordinadores';
 
 export const router = createBrowserRouter([
   // Landing Page
@@ -42,12 +46,21 @@ export const router = createBrowserRouter([
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'carreras-asignaturas', Component: CarrerasAsignaturas },
       { path: 'docentes', Component: DocentesTable },
-      { path: 'coordinadores', Component: Coordinadores },
       { path: 'reportes', Component: Reportes },
       { path: 'correos-masivos', Component: CorreosMasivos },
     ],
   },
   
+  // Módulo Supervisor de Coordinadores
+  {
+    path: '/supervisor',
+    Component: SupervisorLayout,
+    children: [
+      { path: 'dashboard', Component: SupervisorDashboard },
+      { path: 'coordinadores', Component: Coordinadores },
+    ],
+  },
+
   // Módulo Académico
   {
     path: '/academico/login',

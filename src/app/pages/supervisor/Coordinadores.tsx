@@ -210,6 +210,7 @@ export function Coordinadores() {
                 <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>RUT</TableHead>
                   <TableHead>Correo</TableHead>
                   <TableHead>Carrera Asignada</TableHead>
                   <TableHead>Credenciales</TableHead>
@@ -219,7 +220,7 @@ export function Coordinadores() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-gray-500">
+                    <TableCell colSpan={7} className="py-8 text-center text-sm text-gray-500">
                       <Users className="mx-auto mb-2 h-8 w-8 text-gray-300" />
                       No se encontraron coordinadores.
                     </TableCell>
@@ -229,6 +230,7 @@ export function Coordinadores() {
                     <TableRow key={c.id_coordinador}>
                       <TableCell className="font-medium">{c.id_coordinador}</TableCell>
                       <TableCell className="font-medium">{c.nombre}</TableCell>
+                      <TableCell className="text-sm text-gray-600">{c.rut}{c.dv ? `-${c.dv}` : ''}</TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {c.correo_usuario ?? <span className="text-gray-400">—</span>}
                       </TableCell>
@@ -411,8 +413,19 @@ function FormularioCoordinador({
   onSave,
 }: FormularioCoordinadorProps) {
   const [nombre, setNombre] = useState(coordinador?.nombre ?? '');
+  const [rutStr, setRutStr] = useState(coordinador ? `${coordinador.rut}-${coordinador.dv}` : '');
   const [correo, setCorreo] = useState(coordinador?.correo_usuario ?? '');
   const [carrera, setCarrera] = useState<string>(coordinador?.id_carrera ?? SIN_CARRERA);
+
+  const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Mantener solo números y letra K, y poner guión automático antes del último dígito
+    let val = e.target.value.replace(/[^0-9kK]/gi, '').toUpperCase();
+    if (val.length > 1) {
+      setRutStr(`${val.slice(0, -1)}-${val.slice(-1)}`);
+    } else {
+      setRutStr(val);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -420,12 +433,23 @@ function FormularioCoordinador({
       toast.error('El nombre es obligatorio');
       return;
     }
+    
+    const cleanRut = rutStr.replace('-', '');
+    if (cleanRut.length < 7) {
+      toast.error('Ingrese un RUT válido');
+      return;
+    }
+    const rutBase = cleanRut.slice(0, -1);
+    const dv = cleanRut.slice(-1);
+
     if (correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())) {
       toast.error('El correo no tiene un formato válido');
       return;
     }
     onSave({
       nombre: nombre.trim(),
+      rut: rutBase,
+      dv: dv,
       correo_usuario: correo.trim() || null,
       id_carrera: carrera === SIN_CARRERA ? null : carrera,
     });
@@ -440,6 +464,18 @@ function FormularioCoordinador({
           placeholder="María González"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="coord-rut">RUT *</Label>
+        <Input
+          id="coord-rut"
+          placeholder="12345678-9"
+          value={rutStr}
+          onChange={handleRutChange}
+          maxLength={10}
           required
         />
       </div>

@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
-import { FileText, Users, Award, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileText, Users, Award, TrendingUp, CheckCircle, AlertCircle, GraduationCap } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { mockDocentesAcademicos } from '../../data/mockData';
+import { mockDocentesAcademicos, getNombreCarrera } from '../../data/mockData';
 
 export function AcademicDashboard() {
   const totalDocentes = mockDocentesAcademicos.length;
@@ -12,12 +12,27 @@ export function AcademicDashboard() {
   const contenidoAlDia = mockDocentesAcademicos.filter(d => d.contenidoSubido).length;
   const notasAlDia = mockDocentesAcademicos.filter(d => d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales).length;
 
+  // Datos del coordinador logueado
+  const userName = sessionStorage.getItem('userName') || 'Coordinador/a';
+  const carreraId = sessionStorage.getItem('coordinadorCarreraId');
+  const carreraNombre = getNombreCarrera(carreraId);
+  const isSupervising = !!sessionStorage.getItem('modoSupervision');
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Área Académica</h1>
-        <p className="mt-2 text-gray-600">
-          Gestión académica, acreditación y desarrollo docente
+        <h1 className="text-3xl font-bold text-gray-900">
+          {isSupervising
+            ? `Visualizando: ${carreraNombre ?? 'Sin carrera asignada'}`
+            : `Bienvenido ${userName}`}
+        </h1>
+        <p className="mt-2 text-gray-600 flex items-center gap-2">
+          <GraduationCap className="h-4 w-4 text-green-600" />
+          {isSupervising
+            ? `Modo supervisión${carreraNombre ? ` · ${carreraNombre}` : ''}`
+            : (carreraNombre
+                ? `Coordinador de ${carreraNombre}`
+                : 'Coordinador')}
         </p>
       </div>
 
