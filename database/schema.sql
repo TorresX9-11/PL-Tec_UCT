@@ -56,12 +56,13 @@ CREATE TABLE IF NOT EXISTS grupos (
   id_grupo             INT AUTO_INCREMENT NOT NULL,
   id_carrera           VARCHAR(4)  NOT NULL,
   id_curso             VARCHAR(4)  NOT NULL,
+  jornada           ENUM('diurno', 'vespertino'),
   seccion              ENUM('1', '2', '3') NOT NULL DEFAULT '1',
   horas_presencial     TINYINT,
   horas_mixto          TINYINT,
   horas_administrativo TINYINT,
   PRIMARY KEY (id_grupo),
-  FOREIGN KEY (id_carrera, id_curso) REFERENCES cursos(id_carrera, id_curso)
+  FOREIGN KEY (id_carrera, id_curso, jornada) REFERENCES cursos(id_carrera, id_curso, jornada)
 );
 
 -- ----------------------------------------------------------------------------
