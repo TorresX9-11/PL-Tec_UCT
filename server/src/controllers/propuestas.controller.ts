@@ -30,11 +30,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreatePropuestaSchema.parse(req.body);
 
-  const existing = await propuestasService.findPropuestaById(input.id_propuesta);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe una propuesta con id '${input.id_propuesta}'.`);
-  }
-
   const created = await propuestasService.createPropuesta(input);
   res.status(201).json({ data: created });
 }

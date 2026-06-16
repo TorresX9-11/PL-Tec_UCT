@@ -25,7 +25,7 @@ export async function listPagos(): Promise<Pago[]> {
   }));
 }
 
-export async function findPagoById(id: string): Promise<Pago | null> {
+export async function findPagoById(id: number): Promise<Pago | null> {
   const [rows] = await pool.execute<PagoRow[]>(
     'SELECT id_pago, id_propuesta, mes, notas FROM pagos WHERE id_pago = :id LIMIT 1',
     { id },
@@ -43,24 +43,28 @@ export async function findPagoById(id: string): Promise<Pago | null> {
 export async function createPago(input: CreatePagoInput): Promise<Pago> {
   // Convertir undefined a null para campos opcionales
   const dbInput = {
-    ...input,
+    id_propuesta: input.id_propuesta,
+    mes: input.mes,
     notas: input.notas ?? null,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO pagos (id_pago, id_propuesta, mes, notas) VALUES (:id_pago, :id_propuesta, :mes, :notas)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO pagos (id_propuesta, mes, notas) VALUES (:id_propuesta, :mes, :notas)',
     dbInput,
   );
-  return dbInput as Pago;
+  return {
+    id_pago: result.insertId as number,
+    ...dbInput,
+  };
 }
 
 export async function updatePago(
-  id: string,
+  id: number,
   input: UpdatePagoInput,
 ): Promise<Pago | null> {
   // Construir query dinámica solo con campos proporcionados
   const updates: string[] = [];
-  const params: Record<string, string | null> = { id };
+  const params: Record<string, string | number | null> = { id };
 
   if (input.id_propuesta !== undefined) {
     updates.push('id_propuesta = :id_propuesta');
@@ -89,7 +93,7 @@ export async function updatePago(
   return await findPagoById(id);
 }
 
-export async function deletePago(id: string): Promise<boolean> {
+export async function deletePago(id: number): Promise<boolean> {
   const [result] = await pool.execute<ResultSetHeader>(
     'DELETE FROM pagos WHERE id_pago = :id',
     { id },

@@ -44,16 +44,18 @@ export async function findCoordinadorById(id: number): Promise<Coordinador | nul
 export async function createCoordinador(input: CreateCoordinadorInput): Promise<Coordinador> {
   // Convertir undefined a null para campos opcionales
   const dbInput = {
-    ...input,
     correo_usuario: input.correo_usuario ?? null,
     id_carrera: input.id_carrera ?? null,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO coordinadores (id_coordinador, correo_usuario, id_carrera) VALUES (:id_coordinador, :correo_usuario, :id_carrera)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO coordinadores (correo_usuario, id_carrera) VALUES (:correo_usuario, :id_carrera)',
     dbInput,
   );
-  return dbInput as Coordinador;
+  return {
+    id_coordinador: result.insertId as number,
+    ...dbInput,
+  };
 }
 
 export async function updateCoordinador(

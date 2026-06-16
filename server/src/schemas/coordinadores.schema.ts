@@ -19,7 +19,6 @@ export type Coordinador = z.infer<typeof CoordinadorSchema>;
  * Body para POST /coordinadores (create).
  */
 export const CreateCoordinadorSchema = z.object({
-  id_coordinador: z.coerce.number().int().positive(),
   correo_usuario: z.string().email().max(32).nullable().optional(),
   id_carrera: z.string().trim().max(4).nullable().optional(),
 });

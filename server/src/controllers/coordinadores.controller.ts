@@ -33,11 +33,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateCoordinadorSchema.parse(req.body);
 
-  const existing = await coordinadoresService.findCoordinadorById(input.id_coordinador);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe un coordinador con id '${input.id_coordinador}'.`);
-  }
-
   const created = await coordinadoresService.createCoordinador(input);
   res.status(201).json({ data: created });
 }

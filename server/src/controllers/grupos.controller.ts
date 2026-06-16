@@ -30,11 +30,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateGrupoSchema.parse(req.body);
 
-  const existing = await gruposService.findGrupoById(input.id_grupo);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe un grupo con id '${input.id_grupo}'.`);
-  }
-
   const created = await gruposService.createGrupo(input);
   res.status(201).json({ data: created });
 }

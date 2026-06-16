@@ -30,11 +30,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateArchivoSchema.parse(req.body);
 
-  const existing = await archivosService.findArchivoById(input.id_archivo);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe un archivo con id '${input.id_archivo}'.`);
-  }
-
   const created = await archivosService.createArchivo(input);
   res.status(201).json({ data: created });
 }

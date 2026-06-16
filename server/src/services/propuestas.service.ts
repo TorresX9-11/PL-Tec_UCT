@@ -25,7 +25,7 @@ export async function listPropuestas(): Promise<Propuesta[]> {
   }));
 }
 
-export async function findPropuestaById(id: string): Promise<Propuesta | null> {
+export async function findPropuestaById(id: number): Promise<Propuesta | null> {
   const [rows] = await pool.execute<PropuestaRow[]>(
     'SELECT id_propuesta, rut_docente, valor_propuesta, cuotas FROM propuestas WHERE id_propuesta = :id LIMIT 1',
     { id },
@@ -41,15 +41,18 @@ export async function findPropuestaById(id: string): Promise<Propuesta | null> {
 }
 
 export async function createPropuesta(input: CreatePropuestaInput): Promise<Propuesta> {
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO propuestas (id_propuesta, rut_docente, valor_propuesta, cuotas) VALUES (:id_propuesta, :rut_docente, :valor_propuesta, :cuotas)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO propuestas (rut_docente, valor_propuesta, cuotas) VALUES (:rut_docente, :valor_propuesta, :cuotas)',
     input,
   );
-  return { ...input };
+  return {
+    id_propuesta: result.insertId as number,
+    ...input,
+  };
 }
 
 export async function updatePropuesta(
-  id: string,
+  id: number,
   input: UpdatePropuestaInput,
 ): Promise<Propuesta | null> {
   // Construir query dinámica solo con campos proporcionados
@@ -83,7 +86,7 @@ export async function updatePropuesta(
   return await findPropuestaById(id);
 }
 
-export async function deletePropuesta(id: string): Promise<boolean> {
+export async function deletePropuesta(id: number): Promise<boolean> {
   const [result] = await pool.execute<ResultSetHeader>(
     'DELETE FROM propuestas WHERE id_propuesta = :id',
     { id },

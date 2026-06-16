@@ -30,11 +30,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreatePagoSchema.parse(req.body);
 
-  const existing = await pagosService.findPagoById(input.id_pago);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe un pago con id '${input.id_pago}'.`);
-  }
-
   const created = await pagosService.createPago(input);
   res.status(201).json({ data: created });
 }

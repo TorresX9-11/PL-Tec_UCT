@@ -9,7 +9,7 @@ import { z } from 'zod';
  * Representación completa de una capacitación (output / row de DB).
  */
 export const CapacitacionSchema = z.object({
-  id_capacitacion: z.string().min(1).max(16),
+  id_capacitacion: z.number().int().positive(),
   rut_docente: z.number().int().positive().nullable(),
   titulo: z.string().max(64).nullable(),
   descripcion: z.string().nullable(),
@@ -18,9 +18,9 @@ export type Capacitacion = z.infer<typeof CapacitacionSchema>;
 
 /**
  * Body para POST /capacitaciones (create).
+ * El ID se genera automáticamente en la base de datos.
  */
 export const CreateCapacitacionSchema = z.object({
-  id_capacitacion: z.string().trim().min(1).max(16),
   rut_docente: z.coerce.number().int().positive().nullable().optional(),
   titulo: z.string().trim().max(64).nullable().optional(),
   descripcion: z.string().trim().nullable().optional(),
@@ -41,5 +41,5 @@ export type UpdateCapacitacionInput = z.infer<typeof UpdateCapacitacionSchema>;
  * Param :id_capacitacion del path.
  */
 export const CapacitacionIdParamSchema = z.object({
-  id: z.string().trim().min(1).max(16),
+  id: z.coerce.number().int().positive(),
 });

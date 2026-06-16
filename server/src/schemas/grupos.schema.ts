@@ -12,7 +12,7 @@ export type Seccion = z.infer<typeof SeccionSchema>;
  * Representación completa de un grupo (output / row de DB).
  */
 export const GrupoSchema = z.object({
-  id_grupo: z.string().min(1).max(16),
+  id_grupo: z.number().int().positive(),
   id_carrera: z.string().min(1).max(4),
   id_curso: z.string().min(1).max(4),
   seccion: SeccionSchema,
@@ -24,9 +24,9 @@ export type Grupo = z.infer<typeof GrupoSchema>;
 
 /**
  * Body para POST /grupos (create).
+ * El ID se genera automáticamente en la base de datos.
  */
 export const CreateGrupoSchema = z.object({
-  id_grupo: z.string().trim().min(1).max(16),
   id_carrera: z.string().trim().min(1).max(4),
   id_curso: z.string().trim().min(1).max(4),
   seccion: SeccionSchema.default('1'),
@@ -53,5 +53,5 @@ export type UpdateGrupoInput = z.infer<typeof UpdateGrupoSchema>;
  * Param :id_grupo del path.
  */
 export const GrupoIdParamSchema = z.object({
-  id: z.string().trim().min(1).max(16),
+  id: z.coerce.number().int().positive(),
 });

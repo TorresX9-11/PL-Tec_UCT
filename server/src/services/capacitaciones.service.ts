@@ -25,7 +25,7 @@ export async function listCapacitaciones(): Promise<Capacitacion[]> {
   }));
 }
 
-export async function findCapacitacionById(id: string): Promise<Capacitacion | null> {
+export async function findCapacitacionById(id: number): Promise<Capacitacion | null> {
   const [rows] = await pool.execute<CapacitacionRow[]>(
     'SELECT id_capacitacion, rut_docente, titulo, descripcion FROM capacitaciones WHERE id_capacitacion = :id LIMIT 1',
     { id },
@@ -43,21 +43,23 @@ export async function findCapacitacionById(id: string): Promise<Capacitacion | n
 export async function createCapacitacion(input: CreateCapacitacionInput): Promise<Capacitacion> {
   // Convertir undefined a null para campos opcionales
   const dbInput = {
-    ...input,
     rut_docente: input.rut_docente ?? null,
     titulo: input.titulo ?? null,
     descripcion: input.descripcion ?? null,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO capacitaciones (id_capacitacion, rut_docente, titulo, descripcion) VALUES (:id_capacitacion, :rut_docente, :titulo, :descripcion)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO capacitaciones (rut_docente, titulo, descripcion) VALUES (:rut_docente, :titulo, :descripcion)',
     dbInput,
   );
-  return dbInput as Capacitacion;
+  return {
+    id_capacitacion: result.insertId as number,
+    ...dbInput,
+  };
 }
 
 export async function updateCapacitacion(
-  id: string,
+  id: number,
   input: UpdateCapacitacionInput,
 ): Promise<Capacitacion | null> {
   // Construir query dinámica solo con campos proporcionados
@@ -91,7 +93,7 @@ export async function updateCapacitacion(
   return await findCapacitacionById(id);
 }
 
-export async function deleteCapacitacion(id: string): Promise<boolean> {
+export async function deleteCapacitacion(id: number): Promise<boolean> {
   const [result] = await pool.execute<ResultSetHeader>(
     'DELETE FROM capacitaciones WHERE id_capacitacion = :id',
     { id },

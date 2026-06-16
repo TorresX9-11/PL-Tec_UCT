@@ -30,11 +30,6 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateCapacitacionSchema.parse(req.body);
 
-  const existing = await capacitacionesService.findCapacitacionById(input.id_capacitacion);
-  if (existing) {
-    throw new HttpError(409, 'ALREADY_EXISTS', `Ya existe una capacitación con id '${input.id_capacitacion}'.`);
-  }
-
   const created = await capacitacionesService.createCapacitacion(input);
   res.status(201).json({ data: created });
 }

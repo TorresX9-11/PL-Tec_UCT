@@ -25,7 +25,7 @@ export async function listArchivos(): Promise<Archivo[]> {
   }));
 }
 
-export async function findArchivoById(id: string): Promise<Archivo | null> {
+export async function findArchivoById(id: number): Promise<Archivo | null> {
   const [rows] = await pool.execute<ArchivoRow[]>(
     'SELECT id_archivo, correo_usuario, tipo, ruta FROM archivos WHERE id_archivo = :id LIMIT 1',
     { id },
@@ -43,25 +43,29 @@ export async function findArchivoById(id: string): Promise<Archivo | null> {
 export async function createArchivo(input: CreateArchivoInput): Promise<Archivo> {
   // Convertir undefined a null para campos opcionales
   const dbInput = {
-    ...input,
     correo_usuario: input.correo_usuario ?? null,
     tipo: input.tipo ?? null,
+    ruta: input.ruta,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO archivos (id_archivo, correo_usuario, tipo, ruta) VALUES (:id_archivo, :correo_usuario, :tipo, :ruta)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO archivos (correo_usuario, tipo, ruta) VALUES (:correo_usuario, :tipo, :ruta)',
     dbInput,
   );
-  return dbInput as Archivo;
+
+  return {
+    id_archivo: result.insertId as number,
+    ...dbInput,
+  };
 }
 
 export async function updateArchivo(
-  id: string,
+  id: number,
   input: UpdateArchivoInput,
 ): Promise<Archivo | null> {
   // Construir query dinámica solo con campos proporcionados
   const updates: string[] = [];
-  const params: Record<string, string | null> = { id };
+  const params: Record<string, string | number | null> = { id };
 
   if (input.correo_usuario !== undefined) {
     updates.push('correo_usuario = :correo_usuario');
@@ -90,7 +94,7 @@ export async function updateArchivo(
   return await findArchivoById(id);
 }
 
-export async function deleteArchivo(id: string): Promise<boolean> {
+export async function deleteArchivo(id: number): Promise<boolean> {
   const [result] = await pool.execute<ResultSetHeader>(
     'DELETE FROM archivos WHERE id_archivo = :id',
     { id },

@@ -28,7 +28,7 @@ export async function listGrupos(): Promise<Grupo[]> {
   }));
 }
 
-export async function findGrupoById(id: string): Promise<Grupo | null> {
+export async function findGrupoById(id: number): Promise<Grupo | null> {
   const [rows] = await pool.execute<GrupoRow[]>(
     'SELECT id_grupo, id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo FROM grupos WHERE id_grupo = :id LIMIT 1',
     { id },
@@ -49,21 +49,27 @@ export async function findGrupoById(id: string): Promise<Grupo | null> {
 export async function createGrupo(input: CreateGrupoInput): Promise<Grupo> {
   // Convertir undefined a null para campos opcionales
   const dbInput = {
-    ...input,
+    id_carrera: input.id_carrera,
+    id_curso: input.id_curso,
+    seccion: input.seccion,
     horas_presencial: input.horas_presencial ?? null,
     horas_mixto: input.horas_mixto ?? null,
     horas_administrativo: input.horas_administrativo ?? null,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO grupos (id_grupo, id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo) VALUES (:id_grupo, :id_carrera, :id_curso, :seccion, :horas_presencial, :horas_mixto, :horas_administrativo)',
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO grupos (id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo) VALUES (:id_carrera, :id_curso, :seccion, :horas_presencial, :horas_mixto, :horas_administrativo)',
     dbInput,
   );
-  return dbInput as Grupo;
+
+  return {
+    id_grupo: result.insertId as number,
+    ...dbInput,
+  };
 }
 
 export async function updateGrupo(
-  id: string,
+  id: number,
   input: UpdateGrupoInput,
 ): Promise<Grupo | null> {
   // Construir query dinámica solo con campos proporcionados
@@ -109,7 +115,7 @@ export async function updateGrupo(
   return await findGrupoById(id);
 }
 
-export async function deleteGrupo(id: string): Promise<boolean> {
+export async function deleteGrupo(id: number): Promise<boolean> {
   const [result] = await pool.execute<ResultSetHeader>(
     'DELETE FROM grupos WHERE id_grupo = :id',
     { id },
