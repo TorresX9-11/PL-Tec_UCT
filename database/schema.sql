@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   correo_usuario VARCHAR(32) NOT NULL,
   nombre         VARCHAR(128),
   contrasena     VARCHAR(255) NOT NULL,
-  nivel          ENUM('docente', 'coordinador', 'academico', 'admin'),
+  nivel          ENUM('docente', 'coordinador', 'academico', 'supervisor', 'admin'),
   PRIMARY KEY (correo_usuario)
 );
 
@@ -27,33 +27,33 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- carreras: catálogo de carreras impartidas
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS carreras (
-  id_carrera VARCHAR(4)  NOT NULL,
-  nombre     VARCHAR(64) NOT NULL,
+  id_carrera CHAR(4)  NOT NULL,
   jornada    ENUM('diurno', 'vespertino') NOT NULL DEFAULT 'diurno',
-  PRIMARY KEY (id_carrera)
+  nombre     VARCHAR(64) NOT NULL,
+  PRIMARY KEY (id_carrera, jornada)
 );
 
 -- ----------------------------------------------------------------------------
 -- cursos: asignaturas asociadas a una carrera
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cursos (
-  id_carrera        VARCHAR(4)  NOT NULL,
-  id_curso          VARCHAR(5)  NOT NULL,
+  id_carrera        CHAR(4)  NOT NULL,
+  id_curso          CHAR(4)  NOT NULL,
   jornada           ENUM('diurno', 'vespertino') NOT NULL DEFAULT 'diurno',
   nombre            VARCHAR(64) NOT NULL,
   rut_docente       INT,
   semestre          ENUM('1', '2', '3', '4', '5', '6') DEFAULT '1',
   notas_ingresadas  TINYINT,
   notas_curso       TINYINT NOT NULL,
-  PRIMARY KEY (id_carrera, id_curso),
-  FOREIGN KEY (id_carrera) REFERENCES carreras(id_carrera)
+  PRIMARY KEY (id_carrera, id_curso, jornada),
+  FOREIGN KEY (id_carrera, jornada) REFERENCES carreras(id_carrera, jornada)
 );
 
 -- ----------------------------------------------------------------------------
 -- grupos: secciones de un curso (1, 2 o 3) con carga horaria PMA
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS grupos (
-  id_grupo             VARCHAR(16) NOT NULL,
+  id_grupo             INT AUTO_INCREMENT NOT NULL,
   id_carrera           VARCHAR(4)  NOT NULL,
   id_curso             VARCHAR(4)  NOT NULL,
   seccion              ENUM('1', '2', '3') NOT NULL DEFAULT '1',
@@ -82,9 +82,9 @@ CREATE TABLE IF NOT EXISTS docentes (
 -- propuestas: propuesta económica semestral por docente
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS propuestas (
-  id_propuesta    VARCHAR(16),
-  rut_docente     INT,
-  valor_propuesta INT,
+  id_propuesta    INT AUTO_INCREMENT NOT NULL ,
+  rut_docente     INT NOT NULL,
+  valor_propuesta INT NOT NULL,
   cuotas          TINYINT,
   PRIMARY KEY (id_propuesta),
   FOREIGN KEY (rut_docente) REFERENCES docentes(rut_docente)
@@ -94,11 +94,11 @@ CREATE TABLE IF NOT EXISTS propuestas (
 -- pagos: cuotas asociadas a una propuesta
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS pagos (
-  id_pago      VARCHAR(16) NOT NULL,
-  id_propuesta VARCHAR(16) NOT NULL,
+  id_pago      INT AUTO_INCREMENT NOT NULL ,
+  id_propuesta INT NOT NULL,
   mes          ENUM('enero','febrero','marzo','abril',
                     'mayo','junio','julio','agosto',
-                    'septiembre','octubre','noviembre','diciembre'),
+                    'septiembre','octubre','noviembre','diciembre') NOT NULL,
   notas        TEXT(32767),
   PRIMARY KEY (id_pago),
   FOREIGN KEY (id_propuesta) REFERENCES propuestas(id_propuesta)
@@ -108,10 +108,9 @@ CREATE TABLE IF NOT EXISTS pagos (
 -- archivos: documentos cargados por usuarios (CV, certificados, boletas, etc.)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS archivos (
-  id_archivo     VARCHAR(16) NOT NULL,
+  id_archivo     INT AUTO_INCREMENT NOT NULL,
   correo_usuario VARCHAR(32),
-  tipo           VARCHAR(4),
-  ruta           VARCHAR(64) NOT NULL,
+  ruta           VARCHAR(255) NOT NULL,
   PRIMARY KEY (id_archivo),
   FOREIGN KEY (correo_usuario) REFERENCES usuarios(correo_usuario)
 );
@@ -120,7 +119,7 @@ CREATE TABLE IF NOT EXISTS archivos (
 -- capacitaciones: capacitaciones declaradas por cada docente
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS capacitaciones (
-  id_capacitacion VARCHAR(16) NOT NULL,
+  id_capacitacion INT AUTO_INCREMENT NOT NULL,
   rut_docente     INT,
   titulo          VARCHAR(64),
   descripcion     TEXT(16383),
@@ -132,7 +131,7 @@ CREATE TABLE IF NOT EXISTS capacitaciones (
 -- coordinadores: usuarios coordinadores asignados a una carrera
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS coordinadores (
-  id_coordinador TINYINT     NOT NULL,
+  id_coordinador INT AUTO_INCREMENT NOT NULL,
   correo_usuario VARCHAR(32),
   id_carrera     VARCHAR(4),
   PRIMARY KEY (id_coordinador),
