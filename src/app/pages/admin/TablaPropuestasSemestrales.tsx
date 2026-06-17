@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, MessageSquare } from 'lucide-react';
+import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, MessageSquare, Download } from 'lucide-react';
 import {
   mockPropuestasSemestrales,
   mockDocentesMaestros,
@@ -25,6 +25,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const SEMESTRE_ACTUAL = 1;
 const AÑO_ACTUAL = 2026;
@@ -139,6 +141,42 @@ export function TablaPropuestasSemestrales() {
   const getDocenteNombre = (docenteId: number) => {
     const docente = mockDocentesMaestros.find(d => d.id === docenteId);
     return docente?.nombreCompleto || 'Desconocido';
+  };
+
+  // Exportación PDF de las propuestas filtradas en pantalla. Estilo corporativo igual a Reportes.tsx.
+  const handleExportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape' });
+
+    doc.setFontSize(18);
+    doc.text('Propuestas Semestrales - TEC UCT', 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
+    doc.text(`Total Propuestas: ${filteredPropuestas.length}`, 14, 34);
+
+    const rows = filteredPropuestas.map((p) => [
+      getDocenteNombre(p.docenteId),
+      getDocenteRut(p.docenteId),
+      `${p.semestre}-${p.año}`,
+      p.totalHoras,
+      p.totalHoras > 0 ? formatCurrency(Math.round(p.montoTotalPropuesta / p.totalHoras)) : '—',
+      formatCurrency(p.montoTotalPropuesta),
+      p.numeroCuotas,
+      formatCurrency(p.saldo),
+      p.estadoPago,
+    ]);
+
+    autoTable(doc, {
+      head: [['Docente', 'RUT', 'Período', 'Hrs Totales', 'Valor Hora', 'Monto Total', 'Cuotas', 'Saldo', 'Estado Pago']],
+      body: rows,
+      startY: 40,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 40 },
+    });
+
+    doc.save(`propuestas-semestrales-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('PDF generado exitosamente');
   };
 
   const getDocenteRut = (docenteId: number) => {
@@ -297,10 +335,18 @@ export function TablaPropuestasSemestrales() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Propuestas Consolidadas</CardTitle>
-          <CardDescription>
-            Mostrando {filteredPropuestas.length} de {propuestas.length} propuestas
-          </CardDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>Propuestas Consolidadas</CardTitle>
+              <CardDescription>
+                Mostrando {filteredPropuestas.length} de {propuestas.length} propuestas
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
+              <Download className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

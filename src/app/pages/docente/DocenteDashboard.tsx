@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, XCircle, FileText, Award, User, Mail, Phone, BookOpen, DollarSign, Calendar } from 'lucide-react';
+import { AlertCircle, CheckCircle, XCircle, FileText, User, Mail, Phone, BookOpen, DollarSign, Calendar } from 'lucide-react';
 import { Link } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -378,25 +378,6 @@ export function DocenteDashboard() {
                 )}
               </div>
             ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Resumen de Capacitaciones */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Capacitaciones</CardTitle>
-          <CardDescription>Resumen de su formación continua</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
-              <Award className="h-8 w-8 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-3xl font-bold">{docente.capacitaciones}</p>
-              <p className="text-sm text-gray-600">Capacitaciones registradas</p>
-            </div>
           </div>
         </CardContent>
       </Card>

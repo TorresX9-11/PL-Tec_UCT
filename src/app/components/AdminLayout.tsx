@@ -93,6 +93,16 @@ export function AdminLayout() {
             >
               Correos Masivos
             </Link>
+            <Link
+              to="/admin/historial"
+              className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                isActive('/admin/historial')
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Historial
+            </Link>
           </div>
         </div>
       </nav>

@@ -5,7 +5,6 @@ import {
   mockDocentesAcademicos,
   mockSeccionesAsignaturas,
   mockAsignaturas,
-  mockCarreras,
   getRamosDocente,
   getCarrerasByCoordinadorId,
   type EstadoValidacion,
@@ -112,39 +111,23 @@ export function GestionAcademica() {
 
   // ─── Filtros ───────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState('');
-  const [carreraId, setCarreraId] = useState<string>('all'); // 'all' | id
   const [asignaturaId, setAsignaturaId] = useState<string>('all');
 
-  // Opciones de selects: solo carreras/asignaturas con al menos un docente asignado
-  const carrerasOptions = useMemo(() => {
-    const ids = new Set<number>();
-    mockSeccionesAsignaturas.forEach(s => {
-      if (s.docenteId) {
-        const a = mockAsignaturas.find(x => x.id === s.asignaturaId);
-        if (a) ids.add(a.carreraId);
-      }
-    });
-    return mockCarreras.filter(c => ids.has(c.id));
-  }, []);
-
+  // Opciones de select: todas las asignaturas con al menos un docente asignado
   const asignaturasOptions = useMemo(() => {
-    // Si hay carrera seleccionada, restringir asignaturas a esa carrera
-    const carreraNum = carreraId === 'all' ? null : Number(carreraId);
     const ids = new Set<number>();
     mockSeccionesAsignaturas.forEach(s => {
       if (!s.docenteId) return;
       const a = mockAsignaturas.find(x => x.id === s.asignaturaId);
       if (!a) return;
-      if (carreraNum !== null && a.carreraId !== carreraNum) return;
       ids.add(a.id);
     });
     return mockAsignaturas.filter(a => ids.has(a.id));
-  }, [carreraId]);
+  }, []);
 
   // Listado filtrado (AND de los 3 criterios)
   const filteredDocentes = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
-    const carreraNum = carreraId === 'all' ? null : Number(carreraId);
     const asignaturaNum = asignaturaId === 'all' ? null : Number(asignaturaId);
 
     return docentes.filter(d => {
@@ -154,24 +137,23 @@ export function GestionAcademica() {
         const rut = d.rut.toLowerCase();
         if (!nombre.includes(search) && !rut.includes(search)) return false;
       }
-      // Filtros por carrera/asignatura: requieren ramos del docente
-      if (carreraNum !== null || asignaturaNum !== null) {
+      // Filtro por asignatura: requiere ramos del docente
+      if (asignaturaNum !== null) {
         const ramos = getRamosDocente(d.id);
         if (ramos.length === 0) return false;
         const matches = ramos.some(({ asignatura }) => {
           if (!asignatura) return false;
           if (asignaturaNum !== null && asignatura.id !== asignaturaNum) return false;
-          if (carreraNum !== null && asignatura.carreraId !== carreraNum) return false;
           return true;
         });
         if (!matches) return false;
       }
       return true;
     });
-  }, [docentes, searchTerm, carreraId, asignaturaId]);
+  }, [docentes, searchTerm, asignaturaId]);
 
-  const filtrosActivos = searchTerm.trim() !== '' || carreraId !== 'all' || asignaturaId !== 'all';
-  const limpiarFiltros = () => { setSearchTerm(''); setCarreraId('all'); setAsignaturaId('all'); };
+  const filtrosActivos = searchTerm.trim() !== '' || asignaturaId !== 'all';
+  const limpiarFiltros = () => { setSearchTerm(''); setAsignaturaId('all'); };
 
   return (
     <div className="space-y-6">
@@ -249,7 +231,7 @@ export function GestionAcademica() {
 
           {/* Barra de filtros */}
           <div className="grid gap-3 md:grid-cols-12">
-            <div className="md:col-span-5 relative">
+            <div className="md:col-span-7 relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por nombre o RUT..."
@@ -258,29 +240,7 @@ export function GestionAcademica() {
                 className="pl-10"
               />
             </div>
-            <div className="md:col-span-3">
-              <Select
-                value={carreraId}
-                onValueChange={(v: string) => {
-                  setCarreraId(v);
-                  // Si cambia carrera, resetear asignatura para evitar combinación inválida
-                  setAsignaturaId('all');
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las carreras" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las carreras</SelectItem>
-                  {carrerasOptions.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.codigo} — {c.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-3">
+            <div className="md:col-span-4">
               <Select
                 value={asignaturaId}
                 onValueChange={(v: string) => setAsignaturaId(v)}

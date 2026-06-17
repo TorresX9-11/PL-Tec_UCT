@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react';
-import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown, Split, Trash2 } from 'lucide-react';
-import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, mockDocentesMaestros, type SeccionAsignatura } from '../../data/mockData';
+import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown, Split, Trash2, Download, FileText } from 'lucide-react';
+import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, mockDocentesMaestros, getEstadoAsignatura, type SeccionAsignatura } from '../../data/mockData';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -19,7 +19,11 @@ import {
 } from '../../components/ui/command';
 import { Label } from '../../components/ui/label';
 import { cn } from '../../components/ui/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function TablaDesignacionPMA() {
   const [secciones, setSecciones] = useState<SeccionAsignatura[]>(mockSeccionesAsignaturas);
@@ -28,12 +32,16 @@ export function TablaDesignacionPMA() {
   const [expandedAsignaturas, setExpandedAsignaturas] = useState<Set<number>>(new Set());
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSeccion, setEditingSeccion] = useState<SeccionAsignatura | null>(null);
-  const [splittingSeccion, setSplittingSeccion] = useState<SeccionAsignatura | null>(null);
+  const [tabSemestre, setTabSemestre] = useState<'1-3-5' | '2-4-5'>('1-3-5');
+  const [openReporte, setOpenReporte] = useState(false);
 
   // Actualizar cuando cambia la vista o el mock global
   useEffect(() => {
     setSecciones([...mockSeccionesAsignaturas]);
   }, []);
+
+  // Semestres 1-3-5 y 2-4-5 (el 5 — vespertino compartido — aparece en ambos grupos)
+  const semestresTab = tabSemestre === '1-3-5' ? [1, 3, 5] : [2, 4, 5];
 
   const filteredAsignaturas = mockAsignaturas.filter((asig) => {
     const matchesSearch =
@@ -41,7 +49,7 @@ export function TablaDesignacionPMA() {
       asig.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asig.sigla.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCarrera = carreraFilter === 'todas' || asig.carreraId === Number(carreraFilter);
-    return matchesSearch && matchesCarrera;
+    return matchesSearch && matchesCarrera && semestresTab.includes(asig.semestre);
   });
 
   const getCarrera = (carreraId: number) => {
@@ -110,34 +118,28 @@ export function TablaDesignacionPMA() {
     setOpenDialog(false);
   };
 
-  const handleSplitSeccion = (seccion: SeccionAsignatura, partes: number) => {
+  // Una sección solo puede dividirse en exactamente 2 grupos (A y B).
+  const handleSplitSeccion = (seccion: SeccionAsignatura) => {
     const index = mockSeccionesAsignaturas.findIndex(s => s.id === seccion.id);
     if (index === -1) return;
 
-    // Modificar la original para que sea 'A'
-    const seccionOriginal = { ...seccion, subGrupo: 'A' };
-    mockSeccionesAsignaturas[index] = seccionOriginal;
+    // Modificar la original → Grupo A
+    mockSeccionesAsignaturas[index] = { ...seccion, subGrupo: 'A' };
 
-    // Crear las nuevas partes B, C, etc.
-    const letras = ['B', 'C', 'D', 'E', 'F'];
-    const nuevasSecciones: SeccionAsignatura[] = [];
-    
-    let maxId = Math.max(...mockSeccionesAsignaturas.map(s => s.id));
-    
-    for (let i = 0; i < partes - 1; i++) {
-      maxId++;
-      nuevasSecciones.push({
-        ...seccion,
-        id: maxId,
-        subGrupo: letras[i],
-        docenteId: undefined, // El nuevo grupo nace sin docente
-      });
-    }
+    // Crear Grupo B (nace sin docente y sin horas)
+    const maxId = Math.max(...mockSeccionesAsignaturas.map(s => s.id));
+    mockSeccionesAsignaturas.push({
+      ...seccion,
+      id: maxId + 1,
+      subGrupo: 'B',
+      docenteId: undefined,
+      horasP: 0,
+      horasM: 0,
+      horasA: 0,
+    });
 
-    mockSeccionesAsignaturas.push(...nuevasSecciones);
     setSecciones([...mockSeccionesAsignaturas]);
-    setSplittingSeccion(null);
-    toast.success(`Sección dividida en ${partes} grupos exitosamente`);
+    toast.success('Sección dividida en Grupo A y Grupo B');
   };
 
   const handleDeleteSeccion = (id: number) => {
@@ -161,6 +163,136 @@ export function TablaDesignacionPMA() {
       setSecciones([...mockSeccionesAsignaturas]);
       toast.success('Sección eliminada exitosamente');
     }
+  };
+
+  // Exportación PDF (refleja los filtros activos: búsqueda + carrera).
+  // Se aplana la estructura: una fila por sección. Estilo corporativo igual a Reportes.tsx.
+  const handleExportPDF = () => {
+    const doc = new jsPDF({ orientation: 'landscape' });
+
+    doc.setFontSize(18);
+    doc.text('Designación y PMA - TEC UCT', 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
+    doc.text(`Total Asignaturas: ${filteredAsignaturas.length}`, 14, 34);
+
+    const rows: (string | number)[][] = [];
+    filteredAsignaturas.forEach((asig) => {
+      const carrera = getCarrera(asig.carreraId);
+      const seccionesAsig = getSeccionesForAsignatura(asig.id);
+      if (seccionesAsig.length === 0) {
+        rows.push([
+          asig.nombre,
+          carrera?.nombre ?? '—',
+          carrera?.jornada ?? '—',
+          asig.sigla,
+          '—',
+          'Sin asignar',
+          '—', '—',
+          '—',
+        ]);
+      } else {
+        seccionesAsig.forEach((sec: SeccionAsignatura) => {
+          const d = getDocente(sec.docenteId);
+          rows.push([
+            asig.nombre,
+            carrera?.nombre ?? '—',
+            carrera?.jornada ?? '—',
+            asig.sigla,
+            `Sección ${sec.seccion}${sec.subGrupo ? `-${sec.subGrupo}` : ''}`,
+            d?.nombreCompleto ?? 'Sin asignar',
+            d ? `${d.rut}-${d.dv}` : '—',
+            d?.nivelDocente ?? '—',
+            `P:${sec.horasP} M:${sec.horasM} A:${sec.horasA}`,
+          ]);
+        });
+      }
+    });
+
+    autoTable(doc, {
+      head: [['Asignatura', 'Carrera', 'Jornada', 'Sigla', 'Sección/Grupo', 'Docente', 'RUT', 'Nivel', 'Horas PMA']],
+      body: rows,
+      startY: 40,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 40 },
+    });
+
+    doc.save(`designacion-pma-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('PDF generado exitosamente');
+  };
+
+  // Resumen por carrera (refleja el filtro de carrera activo; agrega todas las
+  // secciones de cada carrera independientemente del semestre/pestaña).
+  const filasResumen = mockCarreras
+    .filter((c) => carreraFilter === 'todas' || c.id === Number(carreraFilter))
+    .map((c) => {
+      const asigs = mockAsignaturas.filter((a) => a.carreraId === c.id);
+      const asigIds = new Set(asigs.map((a) => a.id));
+      const secs = mockSeccionesAsignaturas.filter((s) => asigIds.has(s.asignaturaId));
+      const asignadas = secs.filter((s) => s.docenteId).length;
+      const sinDocente = secs.length - asignadas;
+      const cobertura = secs.length > 0 ? Math.round((asignadas / secs.length) * 100) : 0;
+      return {
+        carrera: c.nombre,
+        totalAsignaturas: asigs.length,
+        totalSecciones: secs.length,
+        asignadas,
+        sinDocente,
+        cobertura,
+      };
+    })
+    .filter((f) => f.totalAsignaturas > 0);
+
+  const totalesResumen = filasResumen.reduce(
+    (acc, f) => ({
+      totalAsignaturas: acc.totalAsignaturas + f.totalAsignaturas,
+      totalSecciones: acc.totalSecciones + f.totalSecciones,
+      asignadas: acc.asignadas + f.asignadas,
+      sinDocente: acc.sinDocente + f.sinDocente,
+    }),
+    { totalAsignaturas: 0, totalSecciones: 0, asignadas: 0, sinDocente: 0 }
+  );
+  const coberturaTotal =
+    totalesResumen.totalSecciones > 0
+      ? Math.round((totalesResumen.asignadas / totalesResumen.totalSecciones) * 100)
+      : 0;
+
+  const handleExportResumen = () => {
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(18);
+    doc.text('Resumen por Carrera - Designación PMA', 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
+
+    const rows: (string | number)[][] = filasResumen.map((f) => [
+      f.carrera,
+      f.totalAsignaturas,
+      f.asignadas,
+      f.sinDocente,
+      `${f.cobertura}%`,
+    ]);
+    rows.push([
+      'TOTAL',
+      totalesResumen.totalAsignaturas,
+      totalesResumen.asignadas,
+      totalesResumen.sinDocente,
+      `${coberturaTotal}%`,
+    ]);
+
+    autoTable(doc, {
+      head: [['Carrera', 'Total Asignaturas', 'Secciones Asignadas', 'Secciones Sin Docente', '% Cobertura']],
+      body: rows,
+      startY: 34,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 34 },
+    });
+
+    doc.save(`resumen-pma-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('Resumen exportado exitosamente');
   };
 
   // Count stats
@@ -243,10 +375,18 @@ export function TablaDesignacionPMA() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Asignaturas y Asignaciones</CardTitle>
-          <CardDescription>
-            Mostrando {filteredAsignaturas.length} asignaturas
-          </CardDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>Asignaturas y Asignaciones</CardTitle>
+              <CardDescription>
+                Mostrando {filteredAsignaturas.length} asignaturas
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
+              <Download className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -279,6 +419,15 @@ export function TablaDesignacionPMA() {
                   // Show first section in main row
                   const primeraSeccion = seccionesAsig[0];
                   const docente = primeraSeccion ? getDocente(primeraSeccion.docenteId) : null;
+
+                  // Estado de líneas de ingreso (regla: máx 3, split solo si hay 1 sección)
+                  const { total, tieneGrupos, seccionesSinGrupo } = getEstadoAsignatura(seccionesAsig);
+                  const splitDeshabilitado =
+                    tieneGrupos || seccionesSinGrupo.length > 1 || total === 0;
+                  let tooltipSplit = 'Dividir sección en grupos';
+                  if (tieneGrupos) tooltipSplit = 'Ya está dividida en grupos';
+                  else if (seccionesSinGrupo.length > 1) tooltipSplit = 'No se puede dividir: existen 2 o más secciones';
+                  else if (total === 0) tooltipSplit = 'Primero crea una sección';
 
                   return (
                     <Fragment key={asignatura.id}>
@@ -355,14 +504,21 @@ export function TablaDesignacionPMA() {
                         <TableCell>
                           <div className="flex gap-2">
                             {primeraSeccion && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                title="Dividir en subgrupos"
-                                onClick={() => setSplittingSeccion(primeraSeccion)}
-                              >
-                                <Split className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={splitDeshabilitado}
+                                      onClick={() => handleSplitSeccion(primeraSeccion)}
+                                    >
+                                      <Split className="h-4 w-4" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{tooltipSplit}</TooltipContent>
+                              </Tooltip>
                             )}
                             <Button
                               variant="ghost"
@@ -428,14 +584,21 @@ export function TablaDesignacionPMA() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  title="Dividir en subgrupos"
-                                  onClick={() => setSplittingSeccion(seccion)}
-                                >
-                                  <Split className="h-4 w-4" />
-                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={splitDeshabilitado}
+                                        onClick={() => handleSplitSeccion(seccion)}
+                                      >
+                                        <Split className="h-4 w-4" />
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tooltipSplit}</TooltipContent>
+                                </Tooltip>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -493,75 +656,7 @@ export function TablaDesignacionPMA() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Split Section Dialog */}
-      <Dialog open={splittingSeccion !== null} onOpenChange={(open: boolean) => {
-        if (!open) setSplittingSeccion(null);
-      }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Dividir Sección</DialogTitle>
-            <DialogDescription>
-              {splittingSeccion && (
-                <>
-                  ¿En cuántos grupos deseas dividir la <strong>Sección {splittingSeccion.seccion}{splittingSeccion.subGrupo ? `-${splittingSeccion.subGrupo}` : ''}</strong>?
-                  <br /><br />
-                  Las horas PMA ({splittingSeccion.horasP}P / {splittingSeccion.horasM}M / {splittingSeccion.horasA}A) se clonarán para cada nuevo grupo.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {splittingSeccion && (
-            <FormularioSplit
-              onClose={() => setSplittingSeccion(null)}
-              onSave={(partes) => handleSplitSeccion(splittingSeccion, partes)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
-  );
-}
-
-interface FormularioSplitProps {
-  onClose: () => void;
-  onSave: (partes: number) => void;
-}
-
-function FormularioSplit({ onClose, onSave }: FormularioSplitProps) {
-  const [partes, setPartes] = useState(2);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (partes < 2 || partes > 5) {
-      toast.error('Puedes dividir la sección entre 2 y 5 grupos');
-      return;
-    }
-    onSave(partes);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-      <div>
-        <Label htmlFor="partes">Cantidad de grupos resultantes</Label>
-        <Input
-          id="partes"
-          type="number"
-          min="2"
-          max="5"
-          value={partes}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartes(parseInt(e.target.value) || 2)}
-        />
-      </div>
-      <div className="flex gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-          Cancelar
-        </Button>
-        <Button type="submit" className="flex-1">
-          Dividir
-        </Button>
-      </div>
-    </form>
   );
 }
 

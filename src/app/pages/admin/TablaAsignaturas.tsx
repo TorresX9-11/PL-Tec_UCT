@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, type Asignatura, type SeccionAsignatura } from '../../data/mockData';
+import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, getEstadoAsignatura, type Asignatura, type SeccionAsignatura } from '../../data/mockData';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Label } from '../../components/ui/label';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { toast } from 'sonner';
 
 export function TablaAsignaturas() {
@@ -186,7 +187,14 @@ export function TablaAsignaturas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAsignaturas.map((asignatura: Asignatura) => (
+                {filteredAsignaturas.map((asignatura: Asignatura) => {
+                  const seccionesAsig = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
+                  const { total, tieneGrupos } = getEstadoAsignatura(seccionesAsig);
+                  const addDeshabilitado = total >= 3 || tieneGrupos;
+                  let tooltipAdd = 'Agregar sección';
+                  if (total >= 3) tooltipAdd = 'Máximo 3 secciones por asignatura';
+                  if (tieneGrupos) tooltipAdd = 'No se pueden agregar secciones con grupos activos';
+                  return (
                   <TableRow key={asignatura.id}>
                     <TableCell className="font-medium">{asignatura.id}</TableCell>
                     <TableCell className="font-mono text-sm">{asignatura.codigo}</TableCell>
@@ -201,14 +209,21 @@ export function TablaAsignaturas() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Agregar Sección/Grupo"
-                          onClick={() => setAddingSeccionFor(asignatura)}
-                        >
-                          <Plus className="h-4 w-4 text-green-600" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={addDeshabilitado}
+                                onClick={() => setAddingSeccionFor(asignatura)}
+                              >
+                                <Plus className="h-4 w-4 text-green-600" />
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{tooltipAdd}</TooltipContent>
+                        </Tooltip>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -228,7 +243,8 @@ export function TablaAsignaturas() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -241,10 +257,10 @@ export function TablaAsignaturas() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              Nueva {addingSeccionFor?.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'} - {addingSeccionFor?.sigla}
+              Nueva Sección - {addingSeccionFor?.sigla}
             </DialogTitle>
             <DialogDescription>
-              Cree una nueva sección o grupo para la asignatura {addingSeccionFor?.nombre}. Las horas definidas aquí se usarán en la asignación PMA.
+              Cree una nueva sección para la asignatura {addingSeccionFor?.nombre}. Las horas definidas aquí se usarán en la asignación PMA.
             </DialogDescription>
           </DialogHeader>
           {addingSeccionFor && (
@@ -268,7 +284,7 @@ export function TablaAsignaturas() {
                 
                 mockSeccionesAsignaturas.push(nuevaSeccion);
                 setAddingSeccionFor(null);
-                toast.success(`${addingSeccionFor.tipoSeccion === 'Grupo' ? 'Grupo creado' : 'Sección creada'} exitosamente. Ahora está disponible en la Capa 2.`);
+                toast.success('Sección creada exitosamente. Ahora está disponible en la Capa 2.');
               }}
             />
           )}
@@ -287,9 +303,7 @@ interface FormularioSeccionProps {
 function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionProps) {
   // Pre-calcular el número sugerido (el siguiente disponible para esta asignatura)
   const seccionesActuales = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
-  const nextSeccionNum = seccionesActuales.length > 0 
-    ? Math.max(...seccionesActuales.map(s => s.seccion)) + 1 
-    : 1;
+  const nextSeccionNum = seccionesActuales.length + 1;
 
   const [formData, setFormData] = useState({
     seccion: nextSeccionNum,
@@ -308,7 +322,7 @@ function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionPro
     // Validar que no exista ya otra sección/grupo con ese mismo número para esta asignatura
     const seccionExiste = seccionesActuales.some((s) => s.seccion === formData.seccion);
     if (seccionExiste) {
-      toast.error(`El número de ${asignatura.tipoSeccion === 'Grupo' ? 'grupo' : 'sección'} ${formData.seccion} ya existe en esta asignatura`);
+      toast.error(`El número de sección ${formData.seccion} ya existe en esta asignatura`);
       return;
     }
 
@@ -319,7 +333,7 @@ function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionPro
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <Label htmlFor="seccionNum">Número de {asignatura.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'} *</Label>
+          <Label htmlFor="seccionNum">Número de Sección *</Label>
           <Input
             id="seccionNum"
             type="number"
@@ -372,7 +386,7 @@ function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionPro
           Cancelar
         </Button>
         <Button type="submit" className="flex-1">
-          Guardar {asignatura.tipoSeccion === 'Grupo' ? 'Grupo' : 'Sección'}
+          Guardar Sección
         </Button>
       </div>
     </form>

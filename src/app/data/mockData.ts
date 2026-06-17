@@ -154,6 +154,23 @@ export const mockSeccionesAsignaturas: SeccionAsignatura[] = [
     contenidoBlackboard: 'Validado', notasIngresadas: 2, notasTotales: 2, guiaAprendizaje: 'Por Revisar' }
 ];
 
+/**
+ * Estado de las líneas de ingreso de una asignatura, calculado SIEMPRE desde los
+ * registros reales de `mockSeccionesAsignaturas` (nunca desde `asignatura.tipoSeccion`
+ * ni `asignatura.lineasIngreso`, que quedan como legacy).
+ *
+ * Reglas de negocio:
+ *  - Máximo 3 líneas de ingreso por asignatura.
+ *  - Si hay 2+ secciones (sin subGrupo), NO puede haber grupos.
+ *  - Si hay 1 sección, puede dividirse en exactamente 2 grupos (A y B).
+ */
+export function getEstadoAsignatura(secciones: SeccionAsignatura[]) {
+  const total = secciones.length;
+  const tieneGrupos = secciones.some(s => s.subGrupo);
+  const seccionesSinGrupo = secciones.filter(s => !s.subGrupo);
+  return { total, tieneGrupos, seccionesSinGrupo };
+}
+
 // ================================
 // SISTEMA PMA - MÓDULO ADMINISTRACIÓN
 // ================================

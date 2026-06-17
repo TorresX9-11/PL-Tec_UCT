@@ -6,7 +6,6 @@ import {
   CheckCircle,
   AlertCircle,
   MessageSquare,
-  DollarSign,
   Download,
   ClipboardCheck,
   XCircle,
@@ -57,6 +56,17 @@ import {
   SelectTrigger,
   SelectValue
 } from '../../components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel
+} from '../../components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 // ============================================================================
@@ -66,7 +76,6 @@ import { toast } from 'sonner';
 type DialogState =
   | { tipo: 'pdf'; ctx: CuotaConContexto }
   | { tipo: 'revisar'; ctx: CuotaConContexto }
-  | { tipo: 'pagar'; ctx: CuotaConContexto }
   | { tipo: 'nota'; ctx: CuotaConContexto }
   | null;
 
@@ -298,11 +307,6 @@ export function BandejaBoletas() {
         ctx={dialog?.tipo === 'revisar' ? dialog.ctx : null}
         onClose={() => setDialog(null)}
       />
-      <DialogMarcarPagada
-        open={dialog?.tipo === 'pagar'}
-        ctx={dialog?.tipo === 'pagar' ? dialog.ctx : null}
-        onClose={() => setDialog(null)}
-      />
       <DialogNota
         open={dialog?.tipo === 'nota'}
         ctx={dialog?.tipo === 'nota' ? dialog.ctx : null}
@@ -418,6 +422,24 @@ function FilaCuota({
     return subscribeMensajes(docente.id, (m) => setTieneMensaje(Boolean(m[cuota.id])));
   }, [docente.id, cuota.id]);
 
+  // Workflow de pago simplificado: toggle Pagado / Sin pago con confirmación.
+  const [confirmPagoOpen, setConfirmPagoOpen] = useState(false);
+  const pagada = cuota.estadoPago === 'Pagada';
+
+  const confirmarPago = () => {
+    if (pagada) {
+      setEstadoCuota(cuota.id, { pagada: false });
+      toast.success('Pago revertido a Pendiente.');
+    } else {
+      setEstadoCuota(cuota.id, {
+        pagada: true,
+        fechaPago: new Date().toISOString().split('T')[0]
+      });
+      toast.success(`Pago registrado: ${cuota.mes} · ${docente.nombreCompleto}`);
+    }
+    setConfirmPagoOpen(false);
+  };
+
   return (
     <TableRow>
       <TableCell>
@@ -480,15 +502,40 @@ function FilaCuota({
               <span className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600" />
             )}
           </Button>
-          <Button
-            variant={cuota.estadoPago === 'Pagada' ? 'outline' : 'default'}
-            size="sm"
-            title={cuota.estadoPago === 'Pagada' ? 'Editar pago / revertir' : 'Marcar cuota como pagada'}
-            onClick={() => onAccion({ tipo: 'pagar', ctx: row })}
-          >
-            <DollarSign className="mr-1 h-4 w-4" />
-            {cuota.estadoPago === 'Pagada' ? 'Pago' : 'Pagar'}
-          </Button>
+          <AlertDialog open={confirmPagoOpen} onOpenChange={setConfirmPagoOpen}>
+            <AlertDialogTrigger asChild>
+              {pagada ? (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700"
+                  title="Pagado — clic para revertir"
+                >
+                  <CheckCircle className="mr-1 h-4 w-4" />
+                  Pagado
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" title="Marcar como pagado">
+                  <XCircle className="mr-1 h-4 w-4" />
+                  Sin pago
+                </Button>
+              )}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{pagada ? 'Revertir pago' : 'Confirmar pago'}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pagada
+                    ? '¿Confirmas revertir esta cuota a Pendiente? Se limpiará la fecha de pago.'
+                    : '¿Confirmas que esta cuota fue pagada? Se registrará la fecha de hoy.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmarPago}>Confirmar</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>
@@ -643,116 +690,6 @@ function DialogRevisarBoleta({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={guardar}>Guardar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================================
-//   Diálogo: Marcar cuota como pagada
-// ============================================================================
-
-function DialogMarcarPagada({
-  open,
-  ctx,
-  onClose
-}: {
-  open: boolean;
-  ctx: CuotaConContexto | null;
-  onClose: () => void;
-}) {
-  const hoy = new Date().toISOString().slice(0, 10);
-  const [fecha, setFecha] = useState(hoy);
-  const [referencia, setReferencia] = useState('');
-
-  useEffect(() => {
-    if (open && ctx) {
-      setFecha(ctx.cuota.fechaPago ?? hoy);
-      setReferencia(ctx.cuota.referenciaPago ?? '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, ctx]);
-
-  if (!ctx) return null;
-
-  const yaPagada = ctx.cuota.estadoPago === 'Pagada';
-  const boletaOk =
-    ctx.cuota.boletaEstado === 'Procesada' || ctx.cuota.boletaEstado === 'Subida';
-
-  const confirmar = () => {
-    if (!fecha) {
-      toast.error('Ingrese la fecha del pago.');
-      return;
-    }
-    if (!referencia.trim()) {
-      toast.error('Ingrese la referencia de la transferencia.');
-      return;
-    }
-    setEstadoCuota(ctx.cuota.id, { pagada: true, fechaPago: fecha, referenciaPago: referencia.trim() });
-    toast.success(`Pago registrado: ${ctx.cuota.mes} · ${ctx.docente.nombreCompleto}`);
-    onClose();
-  };
-
-  const revertir = () => {
-    setEstadoCuota(ctx.cuota.id, { pagada: false });
-    toast.success('Pago revertido a Pendiente.');
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {yaPagada ? 'Pago registrado' : 'Registrar pago de cuota'}
-          </DialogTitle>
-          <DialogDescription>
-            {ctx.docente.nombreCompleto} · {ctx.cuota.mes} · {fmtCLP(ctx.cuota.montoBruto)}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {!boletaOk && !yaPagada && (
-            <div className="flex gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <div>
-                Esta cuota aún no tiene la boleta aprobada. Puede registrar el pago
-                igualmente, pero lo recomendado es procesar primero la boleta.
-              </div>
-            </div>
-          )}
-          <div>
-            <Label htmlFor="fecha-pago">Fecha de pago</Label>
-            <Input
-              id="fecha-pago"
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="ref-pago">Referencia / N° transferencia</Label>
-            <Input
-              id="ref-pago"
-              placeholder="Ej: TRX-2026-0451 o RUT del banco"
-              value={referencia}
-              onChange={(e) => setReferencia(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Quedará registrada en la cuota como traza de auditoría.
-            </p>
-          </div>
-        </div>
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          {yaPagada && (
-            <Button variant="destructive" onClick={revertir} className="sm:mr-auto">
-              Revertir a Pendiente
-            </Button>
-          )}
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={confirmar}>
-            {yaPagada ? 'Actualizar' : 'Confirmar pago'}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
