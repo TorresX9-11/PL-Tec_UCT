@@ -15,19 +15,19 @@ type ArchivoRow = Archivo & RowDataPacket;
 
 export async function listArchivos(): Promise<Archivo[]> {
   const [rows] = await pool.execute<ArchivoRow[]>(
-    'SELECT id_archivo, correo_usuario, tipo, ruta FROM archivos ORDER BY id_archivo ASC',
+    'SELECT id_archivo, correo_usuario, ruta FROM archivos ORDER BY id_archivo ASC',
   );
-  return rows.map(({ id_archivo, correo_usuario, tipo, ruta }) => ({
+  return rows.map(({ id_archivo, correo_usuario, ruta }) => ({
     id_archivo,
     correo_usuario,
-    tipo,
+    tipo: null,
     ruta,
   }));
 }
 
 export async function findArchivoById(id: number): Promise<Archivo | null> {
   const [rows] = await pool.execute<ArchivoRow[]>(
-    'SELECT id_archivo, correo_usuario, tipo, ruta FROM archivos WHERE id_archivo = :id LIMIT 1',
+    'SELECT id_archivo, correo_usuario, ruta FROM archivos WHERE id_archivo = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
@@ -35,7 +35,7 @@ export async function findArchivoById(id: number): Promise<Archivo | null> {
   return {
     id_archivo: row.id_archivo,
     correo_usuario: row.correo_usuario,
-    tipo: row.tipo,
+    tipo: null,
     ruta: row.ruta,
   };
 }
@@ -44,18 +44,19 @@ export async function createArchivo(input: CreateArchivoInput): Promise<Archivo>
   // Convertir undefined a null para campos opcionales
   const dbInput = {
     correo_usuario: input.correo_usuario ?? null,
-    tipo: input.tipo ?? null,
     ruta: input.ruta,
   };
 
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO archivos (correo_usuario, tipo, ruta) VALUES (:correo_usuario, :tipo, :ruta)',
+    'INSERT INTO archivos (correo_usuario, ruta) VALUES (:correo_usuario, :ruta)',
     dbInput,
   );
 
   return {
     id_archivo: result.insertId as number,
-    ...dbInput,
+    correo_usuario: dbInput.correo_usuario,
+    tipo: null,
+    ruta: dbInput.ruta,
   };
 }
 
@@ -70,10 +71,6 @@ export async function updateArchivo(
   if (input.correo_usuario !== undefined) {
     updates.push('correo_usuario = :correo_usuario');
     params.correo_usuario = input.correo_usuario;
-  }
-  if (input.tipo !== undefined) {
-    updates.push('tipo = :tipo');
-    params.tipo = input.tipo;
   }
   if (input.ruta !== undefined) {
     updates.push('ruta = :ruta');

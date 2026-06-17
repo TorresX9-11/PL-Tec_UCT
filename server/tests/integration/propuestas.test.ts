@@ -33,7 +33,7 @@ describe('Propuestas Endpoints', () => {
     });
 
     it('debe retornar 404 si la propuesta no existe', async () => {
-      const response = await request(app).get('/api/v1/propuestas/PROP-INEXISTENTE');
+      const response = await request(app).get('/api/v1/propuestas/999999');
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
@@ -42,9 +42,7 @@ describe('Propuestas Endpoints', () => {
 
   describe('POST /api/v1/propuestas', () => {
     it('debe crear propuesta con usuario admin', async () => {
-      const timestamp = Date.now();
       const nuevaPropuesta = {
-        id_propuesta: `PROP${timestamp % 10000}`,
         rut_docente: 12345678,
         valor_propuesta: 1500000,
         cuotas: 6,
@@ -56,6 +54,10 @@ describe('Propuestas Endpoints', () => {
         .send(nuevaPropuesta);
 
       expect([201, 200, 400, 409, 500]).toContain(response.status);
+      if (response.status === 201 || response.status === 200) {
+        expect(response.body.data).toHaveProperty('id_propuesta');
+        expect(typeof response.body.data.id_propuesta).toBe('number');
+      }
     });
 
     it('debe validar cuotas mínimas', async () => {
@@ -63,7 +65,6 @@ describe('Propuestas Endpoints', () => {
         .post('/api/v1/propuestas')
         .set(authHeader(testTokens.admin))
         .send({
-          id_propuesta: 'PROP-TEST',
           rut_docente: 12345678,
           valor_propuesta: 1000000,
           cuotas: 0,
@@ -76,7 +77,6 @@ describe('Propuestas Endpoints', () => {
       const response = await request(app)
         .post('/api/v1/propuestas')
         .send({
-          id_propuesta: 'PROP-TEST',
           rut_docente: 12345678,
           valor_propuesta: 1000000,
           cuotas: 6,
@@ -112,7 +112,7 @@ describe('Propuestas Endpoints', () => {
   describe('DELETE /api/v1/propuestas/:id', () => {
     it('solo admin puede eliminar propuestas', async () => {
       const response = await request(app)
-        .delete('/api/v1/propuestas/PROP-TEST')
+        .delete('/api/v1/propuestas/999999')
         .set(authHeader(testTokens.admin));
 
       expect([200, 404, 409]).toContain(response.status);

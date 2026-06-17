@@ -33,7 +33,7 @@ describe('Pagos Endpoints', () => {
     });
 
     it('debe retornar 404 si el pago no existe', async () => {
-      const response = await request(app).get('/api/v1/pagos/PAGO-INEXISTENTE');
+      const response = await request(app).get('/api/v1/pagos/999999');
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
@@ -42,10 +42,8 @@ describe('Pagos Endpoints', () => {
 
   describe('POST /api/v1/pagos', () => {
     it('debe crear pago con usuario admin', async () => {
-      const timestamp = Date.now();
       const nuevoPago = {
-        id_pago: `PAGO${timestamp % 10000}`,
-        id_propuesta: 'PROP-TEST',
+        id_propuesta: 1,
         mes: 'marzo',
         notas: 'Pago de prueba',
       };
@@ -56,6 +54,10 @@ describe('Pagos Endpoints', () => {
         .send(nuevoPago);
 
       expect([201, 200, 400, 409, 500]).toContain(response.status);
+      if (response.status === 201 || response.status === 200) {
+        expect(response.body.data).toHaveProperty('id_pago');
+        expect(typeof response.body.data.id_pago).toBe('number');
+      }
     });
 
     it('debe validar mes permitido', async () => {
@@ -63,8 +65,7 @@ describe('Pagos Endpoints', () => {
         .post('/api/v1/pagos')
         .set(authHeader(testTokens.admin))
         .send({
-          id_pago: 'PAGO-TEST',
-          id_propuesta: 'PROP-TEST',
+          id_propuesta: 1,
           mes: 'mes-invalido',
         });
 
@@ -75,8 +76,7 @@ describe('Pagos Endpoints', () => {
       const response = await request(app)
         .post('/api/v1/pagos')
         .send({
-          id_pago: 'PAGO-TEST',
-          id_propuesta: 'PROP-TEST',
+          id_propuesta: 1,
           mes: 'enero',
         });
 
@@ -110,7 +110,7 @@ describe('Pagos Endpoints', () => {
   describe('DELETE /api/v1/pagos/:id', () => {
     it('solo admin puede eliminar pagos', async () => {
       const response = await request(app)
-        .delete('/api/v1/pagos/PAGO-TEST')
+        .delete('/api/v1/pagos/999999')
         .set(authHeader(testTokens.admin));
 
       expect([200, 404, 409]).toContain(response.status);

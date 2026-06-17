@@ -33,7 +33,7 @@ describe('Archivos Endpoints', () => {
     });
 
     it('debe retornar 404 si el archivo no existe', async () => {
-      const response = await request(app).get('/api/v1/archivos/ARCH-INEXISTENTE');
+      const response = await request(app).get('/api/v1/archivos/999999');
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
@@ -42,12 +42,8 @@ describe('Archivos Endpoints', () => {
 
   describe('POST /api/v1/archivos', () => {
     it('debe crear archivo con usuario autenticado', async () => {
-      const timestamp = Date.now();
       const nuevoArchivo = {
-        id_archivo: `ARCH${timestamp % 10000}`,
-        tipo: 'PDF',
-        ruta: `/uploads/documento_${timestamp}.pdf`,
-        // correo_usuario es opcional (FK nullable)
+        ruta: `/uploads/documento_${Date.now()}.pdf`,
       };
 
       const response = await request(app)
@@ -55,16 +51,17 @@ describe('Archivos Endpoints', () => {
         .set(authHeader(testTokens.docente))
         .send(nuevoArchivo);
 
-      // Aceptar éxito o error de duplicado/FK
       expect([201, 200, 400, 409, 500]).toContain(response.status);
+      if (response.status === 201 || response.status === 200) {
+        expect(response.body.data).toHaveProperty('id_archivo');
+        expect(typeof response.body.data.id_archivo).toBe('number');
+      }
     });
 
     it('debe retornar 401 sin autenticación', async () => {
       const response = await request(app)
         .post('/api/v1/archivos')
         .send({
-          id_archivo: 'ARCH-TEST',
-          tipo: 'PDF',
           ruta: '/uploads/test.pdf',
         });
 
@@ -75,9 +72,7 @@ describe('Archivos Endpoints', () => {
       const response = await request(app)
         .post('/api/v1/archivos')
         .set(authHeader(testTokens.docente))
-        .send({
-          tipo: 'PDF',
-        });
+        .send({});
 
       expect(response.status).toBe(400);
     });
@@ -106,7 +101,7 @@ describe('Archivos Endpoints', () => {
 
     it('debe retornar 401 sin autenticación', async () => {
       const response = await request(app)
-        .put('/api/v1/archivos/ARCH-TEST')
+        .put('/api/v1/archivos/999999')
         .send({ ruta: '/uploads/test.pdf' });
 
       expect(response.status).toBe(401);
@@ -115,13 +110,13 @@ describe('Archivos Endpoints', () => {
 
   describe('DELETE /api/v1/archivos/:id', () => {
     it('debe retornar 401 sin autenticación', async () => {
-      const response = await request(app).delete('/api/v1/archivos/ARCH-TEST');
+      const response = await request(app).delete('/api/v1/archivos/999999');
       expect(response.status).toBe(401);
     });
 
     it('cualquier usuario autenticado puede eliminar archivos', async () => {
       const response = await request(app)
-        .delete('/api/v1/archivos/ARCH-TEST')
+        .delete('/api/v1/archivos/999999')
         .set(authHeader(testTokens.docente));
 
       expect([200, 404, 409]).toContain(response.status);

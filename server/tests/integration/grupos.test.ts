@@ -33,9 +33,8 @@ describe('Grupos Endpoints', () => {
     });
 
     it('debe retornar 404 si el grupo no existe', async () => {
-      const response = await request(app).get('/api/v1/grupos/GRP-NOEXISTE999');
+      const response = await request(app).get('/api/v1/grupos/999999');
 
-      // Puede ser 404 (no existe) o 400 (validación de formato)
       expect([404, 400]).toContain(response.status);
       expect(response.body).toHaveProperty('error');
     });
@@ -43,9 +42,7 @@ describe('Grupos Endpoints', () => {
 
   describe('POST /api/v1/grupos', () => {
     it('debe crear grupo con usuario admin', async () => {
-      const timestamp = Date.now();
       const nuevoGrupo = {
-        id_grupo: `GRP${timestamp % 10000}`,
         id_carrera: 'TEST',
         id_curso: 'TEST',
         seccion: '1',
@@ -60,6 +57,10 @@ describe('Grupos Endpoints', () => {
         .send(nuevoGrupo);
 
       expect([201, 200, 400, 409, 500]).toContain(response.status);
+      if (response.status === 201 || response.status === 200) {
+        expect(response.body.data).toHaveProperty('id_grupo');
+        expect(typeof response.body.data.id_grupo).toBe('number');
+      }
     });
 
     it('debe validar seccion permitida', async () => {
@@ -67,7 +68,6 @@ describe('Grupos Endpoints', () => {
         .post('/api/v1/grupos')
         .set(authHeader(testTokens.admin))
         .send({
-          id_grupo: 'GRP-TEST',
           id_carrera: 'TEST',
           id_curso: 'TEST',
           seccion: '5',
@@ -80,7 +80,6 @@ describe('Grupos Endpoints', () => {
       const response = await request(app)
         .post('/api/v1/grupos')
         .send({
-          id_grupo: 'GRP-TEST',
           id_carrera: 'TEST',
           id_curso: 'TEST',
           seccion: '1',
@@ -116,7 +115,7 @@ describe('Grupos Endpoints', () => {
   describe('DELETE /api/v1/grupos/:id', () => {
     it('solo admin puede eliminar grupos', async () => {
       const response = await request(app)
-        .delete('/api/v1/grupos/GRP-TEST')
+        .delete('/api/v1/grupos/999999')
         .set(authHeader(testTokens.admin));
 
       expect([200, 404, 409]).toContain(response.status);
