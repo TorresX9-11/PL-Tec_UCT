@@ -27,7 +27,10 @@ async function main(): Promise<void> {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CORS_ORIGINS,
+      // En desarrollo reflejamos el origen de la petición (permite localhost,
+      // 127.0.0.1 y el proxy del browser preview). En producción se restringe
+      // a la lista blanca de CORS_ORIGINS.
+      origin: env.NODE_ENV === 'development' ? true : env.CORS_ORIGINS,
       credentials: true,
     }),
   );
