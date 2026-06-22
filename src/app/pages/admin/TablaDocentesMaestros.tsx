@@ -1,6 +1,14 @@
-import { useState } from 'react';
-import { Search, Plus, Edit, Trash2, BookOpen, X } from 'lucide-react';
-import { mockDocentesMaestros, mockSeccionesAsignaturas, mockAsignaturas, formatRUT, type DocenteMaestro } from '../../data/mockData';
+import { useState, useEffect } from 'react';
+import { Search, Plus, Edit, Trash2, BookOpen, X, Loader2, WifiOff } from 'lucide-react';
+import { mockSeccionesAsignaturas, mockAsignaturas, formatRUT, type DocenteMaestro } from '../../data/mockData';
+import {
+  listDocentes,
+  createDocente,
+  updateDocente,
+  deleteDocente,
+  type DataSource,
+} from '../../data/docentes';
+import { ApiError } from '../../data/apiClient';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -11,8 +19,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
 
+/** Traduce un error de API a un mensaje claro para el usuario. */
+function errMsg(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'Inicia sesión como administrador para guardar cambios.';
+    if (err.status === 403) return 'No tienes permisos para esta acción.';
+    if (err.code === 'DB_ERROR') {
+      return 'No se pudo guardar: verifica que el correo corresponda a un usuario registrado, o que el docente no esté referenciado por cursos/propuestas.';
+    }
+    return err.message;
+  }
+  return 'Ocurrió un error inesperado.';
+}
+
 export function TablaDocentesMaestros() {
-  const [docentes, setDocentes] = useState<DocenteMaestro[]>(mockDocentesMaestros);
+  const [docentes, setDocentes] = useState<DocenteMaestro[]>([]);
+  const [source, setSource] = useState<DataSource>('backend');
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingDocente, setEditingDocente] = useState<DocenteMaestro | null>(null);
@@ -20,6 +43,24 @@ export function TablaDocentesMaestros() {
   const [openRamosDialog, setOpenRamosDialog] = useState(false);
   const [docenteRamos, setDocenteRamos] = useState<DocenteMaestro | null>(null);
   const [seccionesVersion, setSeccionesVersion] = useState(0);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await listDocentes();
+      setDocentes(res.data);
+      setSource(res.source);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const abrirEditarRamos = (docente: DocenteMaestro) => {
     setDocenteRamos(docente);
@@ -50,10 +91,19 @@ export function TablaDocentesMaestros() {
       docente.correo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDeleteDocente = (id: number) => {
-    if (confirm('¿Está seguro de eliminar este docente? Esta acción no se puede deshacer.')) {
-      setDocentes(docentes.filter(d => d.id !== id));
+  const handleDeleteDocente = async (docente: DocenteMaestro) => {
+    if (!confirm('¿Está seguro de eliminar este docente? Esta acción no se puede deshacer.')) return;
+    if (source === 'mock') {
+      setDocentes((prev) => prev.filter((d) => d.id !== docente.id));
+      toast.success('Docente eliminado (modo demo)');
+      return;
+    }
+    try {
+      await deleteDocente(docente.id);
       toast.success('Docente eliminado exitosamente');
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
     }
   };
 
@@ -62,11 +112,37 @@ export function TablaDocentesMaestros() {
     setOpenDialog(true);
   };
 
-  const handleUpdateDocente = (updatedDocente: DocenteMaestro) => {
-    setDocentes(docentes.map(d => d.id === updatedDocente.id ? updatedDocente : d));
-    setEditingDocente(null);
-    setOpenDialog(false);
-    toast.success('Docente actualizado exitosamente');
+  const handleSaveDocente = async (docenteData: Omit<DocenteMaestro, 'id'>) => {
+    // Modo demo (backend caído): solo memoria.
+    if (source === 'mock') {
+      if (editingDocente) {
+        setDocentes((prev) =>
+          prev.map((d) => (d.id === editingDocente.id ? { ...docenteData, id: editingDocente.id } : d)),
+        );
+        toast.success('Docente actualizado (modo demo)');
+      } else {
+        setDocentes((prev) => [...prev, { ...docenteData, id: (prev[prev.length - 1]?.id ?? 0) + 1 }]);
+        toast.success('Docente agregado (modo demo)');
+      }
+      setOpenDialog(false);
+      setEditingDocente(null);
+      return;
+    }
+    // Modo backend real.
+    try {
+      if (editingDocente) {
+        await updateDocente(editingDocente.id, docenteData);
+        toast.success('Docente actualizado exitosamente');
+      } else {
+        await createDocente(docenteData);
+        toast.success('Docente agregado exitosamente');
+      }
+      setOpenDialog(false);
+      setEditingDocente(null);
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
   };
 
   const docentesSinNivel = docentes.filter(d => !d.nivelDocente).length;
@@ -141,19 +217,19 @@ export function TablaDocentesMaestros() {
                 setOpenDialog(false);
                 setEditingDocente(null);
               }}
-              onSave={(docenteData) => {
-                if (editingDocente) {
-                  handleUpdateDocente({ ...docenteData, id: editingDocente.id });
-                } else {
-                  setDocentes([...docentes, { ...docenteData, id: docentes.length + 1 }]);
-                  setOpenDialog(false);
-                  toast.success('Docente agregado exitosamente');
-                }
-              }}
+              onSave={handleSaveDocente}
             />
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Aviso modo demo (backend no disponible) */}
+      {source === 'mock' && (
+        <div className="flex items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+          <WifiOff className="h-4 w-4" />
+          Sin conexión con el backend: mostrando datos de demostración. Los cambios no se guardarán.
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-5">
@@ -241,9 +317,14 @@ export function TablaDocentesMaestros() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Registro de Docentes</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Registro de Docentes
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+          </CardTitle>
           <CardDescription>
-            Mostrando {filteredDocentes.length} de {docentes.length} docentes
+            {loading
+              ? 'Cargando docentes...'
+              : `Mostrando ${filteredDocentes.length} de ${docentes.length} docentes`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -327,7 +408,7 @@ export function TablaDocentesMaestros() {
                             variant="ghost"
                             size="sm"
                             title="Eliminar docente"
-                            onClick={() => handleDeleteDocente(docente.id)}
+                            onClick={() => handleDeleteDocente(docente)}
                           >
                             <Trash2 className="h-4 w-4 text-red-600" />
                           </Button>
