@@ -20,7 +20,7 @@ export const LoginResponseSchema = z.object({
   token: z.string(),
   user: z.object({
     correo: z.string(),
-    nivel: z.enum(['docente', 'coordinador', 'academico', 'admin']),
+    nivel: z.enum(['docente', 'coordinador', 'academico', 'supervisor', 'admin']),
   }),
 });
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;

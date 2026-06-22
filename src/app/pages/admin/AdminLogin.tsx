@@ -5,6 +5,8 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
+import { login, logout } from '../../data/auth';
+import { ApiError } from '../../data/apiClient';
 
 export function AdminLogin() {
   const navigate = useNavigate();
@@ -16,18 +18,35 @@ export function AdminLogin() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulación de autenticación
-    setTimeout(() => {
-      // Por ahora, cualquier usuario/contraseña funciona
-      // En producción, aquí validarías contra tu base de datos SQL
-      if (username && password) {
-        toast.success('Inicio de sesión exitoso');
-        navigate('/admin/dashboard');
-      } else {
-        toast.error('Usuario o contraseña incorrectos');
+    try {
+      // Login real contra el backend (POST /auth/login → JWT)
+      const user = await login(username, password);
+
+      // El módulo de administración solo admite usuarios de nivel admin.
+      if (user.nivel !== 'admin') {
+        logout();
+        toast.error('Este usuario no tiene permisos de administración.');
+        return;
       }
+
+      toast.success('Inicio de sesión exitoso');
+      navigate('/admin/dashboard');
+    } catch (err) {
+      // Fallback de desarrollo: si el backend no está disponible, permitir la
+      // credencial legacy admin/admin para no bloquear el trabajo local.
+      if (err instanceof ApiError && err.isNetwork) {
+        if (username === 'admin' && password === 'admin') {
+          toast.warning('Sin conexión al backend: sesión local de desarrollo.');
+          navigate('/admin/dashboard');
+          return;
+        }
+        toast.error('No se pudo conectar con el servidor.');
+        return;
+      }
+      toast.error(err instanceof ApiError ? err.message : 'Usuario o contraseña incorrectos');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (

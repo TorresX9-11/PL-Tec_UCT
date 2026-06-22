@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Mapean 1:1 a la tabla `usuarios` definida en database/schema.sql.
  */
 
-export const NivelSchema = z.enum(['docente', 'coordinador', 'academico', 'admin']);
+export const NivelSchema = z.enum(['docente', 'coordinador', 'academico', 'supervisor', 'admin']);
 export type Nivel = z.infer<typeof NivelSchema>;
 
 /**

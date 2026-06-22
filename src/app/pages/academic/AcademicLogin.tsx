@@ -10,6 +10,8 @@ import {
   mockCoordinadores, 
   mockSupervisores 
 } from '../../data/mockData';
+import { login, type AuthUser } from '../../data/auth';
+import { ApiError } from '../../data/apiClient';
 
 export function AcademicLogin() {
   const navigate = useNavigate();
@@ -17,11 +19,88 @@ export function AcademicLogin() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  /**
+   * Login real exitoso: mapea el correo devuelto por el backend a la entidad
+   * mock correspondiente para poblar los IDs que el resto de la app aún lee de
+   * sessionStorage (docenteId, carrera, etc.) hasta que esos recursos se
+   * conecten en fases posteriores.
+   */
+  const applyRealSession = (user: AuthUser) => {
+    const correoLower = user.correo.toLowerCase();
+    switch (user.nivel) {
+      case 'admin':
+        toast.success('Inicio de sesión exitoso');
+        navigate('/admin/dashboard');
+        return;
+      case 'supervisor': {
+        const sup = mockSupervisores.find(s => s.correo_usuario.toLowerCase() === correoLower);
+        sessionStorage.setItem('userRole', 'supervisor');
+        if (sup) {
+          sessionStorage.setItem('supervisorId', sup.id_supervisor.toString());
+          sessionStorage.setItem('supervisorNombre', sup.nombre);
+        }
+        toast.success(`Bienvenido/a ${sup?.nombre ?? user.correo}`);
+        navigate('/supervisor/dashboard');
+        return;
+      }
+      case 'coordinador': {
+        const coord = mockCoordinadores.find(c => c.correo_usuario?.toLowerCase() === correoLower);
+        sessionStorage.setItem('userRole', 'admin_academico');
+        sessionStorage.setItem('userName', coord?.nombre ?? user.correo);
+        if (coord?.id_carrera) sessionStorage.setItem('coordinadorCarreraId', coord.id_carrera);
+        else sessionStorage.removeItem('coordinadorCarreraId');
+        toast.success(`Bienvenido/a ${coord?.nombre ?? user.correo}`);
+        navigate('/academico/dashboard');
+        return;
+      }
+      case 'academico': {
+        sessionStorage.setItem('userRole', 'admin_academico');
+        sessionStorage.setItem('userName', user.correo);
+        sessionStorage.removeItem('coordinadorCarreraId');
+        toast.success('Inicio de sesión exitoso');
+        navigate('/academico/dashboard');
+        return;
+      }
+      case 'docente': {
+        const doc = mockDocentesAcademicos.find(d => d.correo.toLowerCase() === correoLower);
+        sessionStorage.setItem('userRole', 'docente');
+        if (doc) {
+          sessionStorage.setItem('docenteId', doc.id.toString());
+          sessionStorage.setItem('docenteNombre', doc.nombreCompleto);
+          sessionStorage.setItem('docenteRut', doc.rut);
+        }
+        sessionStorage.setItem('docente_check_mensajes', '1');
+        toast.success(`Bienvenido/a ${doc?.nombreCompleto ?? user.correo}`);
+        navigate('/docente/dashboard');
+        return;
+      }
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
+    // 1. Intentar login real contra el backend (JWT).
+    try {
+      const user = await login(username, password);
+      applyRealSession(user);
+      setIsLoading(false);
+      return;
+    } catch (err) {
+      // Si el backend no está disponible o las credenciales no existen aún en
+      // la BD, se cae al flujo mock (datos de demo) para no bloquear el trabajo.
+      if (err instanceof ApiError && err.isNetwork) {
+        toast.warning('Sin conexión al backend: usando datos de demostración.');
+      }
+      mockLogin();
+      setIsLoading(false);
+    }
+  };
+
+  // Flujo de autenticación mock (fallback de desarrollo).
+  const mockLogin = () => {
+    {
       // Regla de login: Correo y RUT sin dígito verificador.
       const correoLower = username.toLowerCase().trim();
       const passLimpia = password.replace(/\./g, '').trim(); // Contraseña ingresada (se quitan puntos)
@@ -89,7 +168,7 @@ export function AcademicLogin() {
 
       toast.error('Credenciales incorrectas o usuario no encontrado');
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   const handleForgotPassword = () => {

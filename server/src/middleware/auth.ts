@@ -6,7 +6,7 @@ import { HttpError } from './error.js';
 /**
  * Niveles de usuario según schema.sql → usuarios.nivel.
  */
-export type UserLevel = 'docente' | 'coordinador' | 'academico' | 'admin';
+export type UserLevel = 'docente' | 'coordinador' | 'academico' | 'supervisor' | 'admin';
 
 export interface AuthPayload {
   correo: string;
