@@ -1,6 +1,14 @@
-import { useState } from 'react';
-import { Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { mockCarreras, type Carrera } from '../../data/mockData';
+import { useState, useEffect } from 'react';
+import { Search, Plus, Edit, Trash2, Loader2, WifiOff } from 'lucide-react';
+import { type Carrera } from '../../data/mockData';
+import {
+  listCarreras,
+  createCarrera,
+  updateCarrera,
+  deleteCarrera,
+  type DataSource,
+} from '../../data/carreras';
+import { ApiError } from '../../data/apiClient';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -11,12 +19,42 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
 
+/** Traduce un error de API a un mensaje claro para el usuario. */
+function errMsg(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'Inicia sesión como administrador para guardar cambios.';
+    if (err.status === 403) return 'No tienes permisos para esta acción.';
+    return err.message;
+  }
+  return 'Ocurrió un error inesperado.';
+}
+
 export function TablaCarreras() {
-  const [carreras, setCarreras] = useState<Carrera[]>(mockCarreras);
+  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [source, setSource] = useState<DataSource>('backend');
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [jornadaFilter, setJornadaFilter] = useState<string>('todas');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCarrera, setEditingCarrera] = useState<Carrera | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await listCarreras();
+      setCarreras(res.data);
+      setSource(res.source);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredCarreras = carreras.filter((carrera) => {
     const matchesSearch =
@@ -26,10 +64,21 @@ export function TablaCarreras() {
     return matchesSearch && matchesJornada;
   });
 
-  const handleDeleteCarrera = (id: number) => {
-    if (confirm('¿Está seguro de eliminar esta carrera? Esto también afectará a sus asignaturas asociadas.')) {
-      setCarreras(carreras.filter(c => c.id !== id));
+  const handleDeleteCarrera = async (carrera: Carrera) => {
+    if (!confirm('¿Está seguro de eliminar esta carrera? Esto también afectará a sus asignaturas asociadas.')) {
+      return;
+    }
+    if (source === 'mock') {
+      setCarreras((prev) => prev.filter((c) => c.id !== carrera.id));
+      toast.success('Carrera eliminada (modo demo)');
+      return;
+    }
+    try {
+      await deleteCarrera(carrera.codigo);
       toast.success('Carrera eliminada exitosamente');
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
     }
   };
 
@@ -38,11 +87,40 @@ export function TablaCarreras() {
     setOpenDialog(true);
   };
 
-  const handleUpdateCarrera = (updatedCarrera: Carrera) => {
-    setCarreras(carreras.map(c => c.id === updatedCarrera.id ? updatedCarrera : c));
-    setEditingCarrera(null);
-    setOpenDialog(false);
-    toast.success('Carrera actualizada exitosamente');
+  const handleSaveCarrera = async (carreraData: Omit<Carrera, 'id'>) => {
+    // Modo demo (backend caído): operaciones solo en memoria.
+    if (source === 'mock') {
+      if (editingCarrera) {
+        setCarreras((prev) =>
+          prev.map((c) => (c.id === editingCarrera.id ? { ...carreraData, id: editingCarrera.id } : c)),
+        );
+        toast.success('Carrera actualizada (modo demo)');
+      } else {
+        setCarreras((prev) => [...prev, { ...carreraData, id: (prev[prev.length - 1]?.id ?? 0) + 1 }]);
+        toast.success('Carrera agregada (modo demo)');
+      }
+      setOpenDialog(false);
+      setEditingCarrera(null);
+      return;
+    }
+    // Modo backend real.
+    try {
+      if (editingCarrera) {
+        await updateCarrera(editingCarrera.codigo, {
+          nombre: carreraData.nombre,
+          jornada: carreraData.jornada,
+        });
+        toast.success('Carrera actualizada exitosamente');
+      } else {
+        await createCarrera(carreraData);
+        toast.success('Carrera agregada exitosamente');
+      }
+      setOpenDialog(false);
+      setEditingCarrera(null);
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
   };
 
   return (
@@ -81,19 +159,19 @@ export function TablaCarreras() {
                 setOpenDialog(false);
                 setEditingCarrera(null);
               }}
-              onSave={(carreraData) => {
-                if (editingCarrera) {
-                  handleUpdateCarrera({ ...carreraData, id: editingCarrera.id });
-                } else {
-                  setCarreras([...carreras, { ...carreraData, id: carreras.length + 1 }]);
-                  setOpenDialog(false);
-                  toast.success('Carrera agregada exitosamente');
-                }
-              }}
+              onSave={handleSaveCarrera}
             />
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Aviso modo demo (backend no disponible) */}
+      {source === 'mock' && (
+        <div className="flex items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+          <WifiOff className="h-4 w-4" />
+          Sin conexión con el backend: mostrando datos de demostración. Los cambios no se guardarán.
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -155,9 +233,14 @@ export function TablaCarreras() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Registro de Carreras</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Registro de Carreras
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+          </CardTitle>
           <CardDescription>
-            Mostrando {filteredCarreras.length} de {carreras.length} carreras
+            {loading
+              ? 'Cargando carreras...'
+              : `Mostrando ${filteredCarreras.length} de ${carreras.length} carreras`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,7 +278,7 @@ export function TablaCarreras() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteCarrera(carrera.id)}
+                          onClick={() => handleDeleteCarrera(carrera)}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
@@ -243,11 +326,13 @@ function FormularioCarrera({ carrera, onClose, onSave }: FormularioCarreraProps)
           <Label htmlFor="codigo">Código de Carrera *</Label>
           <Input
             id="codigo"
-            placeholder="TUI-D"
+            placeholder="INF"
+            maxLength={4}
             value={formData.codigo}
             onChange={(e) => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })}
             required
           />
+          <p className="mt-1 text-xs text-gray-500">Máximo 4 caracteres (restricción de la base de datos).</p>
         </div>
         <div>
           <Label htmlFor="jornada">Jornada *</Label>
