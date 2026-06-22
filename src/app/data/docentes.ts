@@ -16,6 +16,7 @@
  */
 
 import { api, ApiError } from './apiClient';
+import { createUsuario } from './usuarios';
 import { mockDocentesMaestros, type DocenteMaestro, type EstadoValidacion } from './mockData';
 
 interface BackendDocente {
@@ -75,13 +76,40 @@ export async function listDocentes(): Promise<ListDocentesResult> {
 
 type DocenteInput = Omit<DocenteMaestro, 'id'>;
 
-/** Crea un docente (requiere JWT admin/coordinador). */
+/**
+ * Crea un docente (requiere JWT admin).
+ *
+ * Regla de negocio: al agregar un docente con correo, se le crea automáticamente
+ * su cuenta de acceso (nivel `docente`) con contraseña temporal = su RUT sin
+ * dígito verificador. El docente deberá cambiarla luego. Esto evita el error de
+ * clave foránea `docentes.correo_usuario → usuarios.correo_usuario`.
+ *
+ * Si la cuenta ya existía (correo ya registrado), se omite la creación y solo
+ * se enlaza el docente a esa cuenta.
+ */
 export async function createDocente(input: DocenteInput): Promise<void> {
+  const correo = input.correo.trim();
+
+  if (correo) {
+    try {
+      await createUsuario({
+        correo_usuario: correo,
+        nombre: input.nombreCompleto,
+        // Contraseña temporal = RUT sin dígito verificador.
+        contrasena: input.rut,
+        nivel: 'docente',
+      });
+    } catch (err) {
+      // 409: la cuenta ya existe → continuamos y solo enlazamos el docente.
+      if (!(err instanceof ApiError && err.status === 409)) throw err;
+    }
+  }
+
   await api.post('/docentes', {
     rut_docente: Number(input.rut),
     dv: input.dv,
     nombre: input.nombreCompleto,
-    correo_usuario: input.correo ? input.correo : null,
+    correo_usuario: correo ? correo : null,
     contacto: null,
     nivel_docente: input.nivelDocente ?? null,
   });

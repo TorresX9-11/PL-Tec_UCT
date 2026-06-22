@@ -579,6 +579,16 @@ function FormularioDocente({ docente, onClose, onSave }: FormularioDocenteProps)
       return;
     }
 
+    // Validar formato de correo (el backend crea la cuenta y exige email válido)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.correo.trim())) {
+      toast.error('Ingrese un correo electrónico válido');
+      return;
+    }
+    if (formData.correo.trim().length > 32) {
+      toast.error('El correo no puede superar 32 caracteres (restricción de la BD).');
+      return;
+    }
+
     onSave(formData);
   };
 
@@ -627,9 +637,16 @@ function FormularioDocente({ docente, onClose, onSave }: FormularioDocenteProps)
           type="email"
           placeholder="docente@uct.cl"
           value={formData.correo}
+          maxLength={32}
           onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
           required
         />
+        {!docente && (
+          <p className="mt-1 text-xs text-blue-700">
+            Se creará automáticamente una cuenta de acceso (nivel docente) con este correo. La
+            contraseña temporal será el RUT sin dígito verificador; el docente deberá cambiarla al ingresar.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
