@@ -1,6 +1,18 @@
-import { useState } from 'react';
-import { Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, getEstadoAsignatura, type Asignatura, type SeccionAsignatura } from '../../data/mockData';
+import { useState, useEffect } from 'react';
+import { Search, Plus, Edit, Trash2, Loader2, WifiOff } from 'lucide-react';
+import { mockSeccionesAsignaturas, getEstadoAsignatura, type SeccionAsignatura, type Carrera } from '../../data/mockData';
+import {
+  listCursos,
+  createCurso,
+  updateCurso,
+  deleteCurso,
+  syntheticCursoId,
+  type CursoAsignatura,
+  type CursoInput,
+  type DataSource,
+} from '../../data/cursos';
+import { listCarreras } from '../../data/carreras';
+import { ApiError } from '../../data/apiClient';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -12,51 +24,141 @@ import { Label } from '../../components/ui/label';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { toast } from 'sonner';
 
+/** Traduce un error de API a un mensaje claro para el usuario. */
+function errMsg(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'Inicia sesión como administrador para guardar cambios.';
+    if (err.status === 403) return 'No tienes permisos para esta acción.';
+    if (err.status === 409) return 'Ya existe un curso con esa carrera y sigla.';
+    if (err.code === 'DB_ERROR') {
+      return 'No se pudo guardar: verifica que la carrera exista y que la sigla no esté duplicada.';
+    }
+    return err.message;
+  }
+  return 'Ocurrió un error inesperado.';
+}
+
 export function TablaAsignaturas() {
-  const [asignaturas, setAsignaturas] = useState<Asignatura[]>(mockAsignaturas);
+  const [asignaturas, setAsignaturas] = useState<CursoAsignatura[]>([]);
+  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [source, setSource] = useState<DataSource>('backend');
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [carreraFilter, setCarreraFilter] = useState<string>('todas');
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingAsignatura, setEditingAsignatura] = useState<Asignatura | null>(null);
-  const [addingSeccionFor, setAddingSeccionFor] = useState<Asignatura | null>(null);
+  const [editingAsignatura, setEditingAsignatura] = useState<CursoAsignatura | null>(null);
+  const [addingSeccionFor, setAddingSeccionFor] = useState<CursoAsignatura | null>(null);
 
-  const filteredAsignaturas = asignaturas.filter((asig: Asignatura) => {
-    const matchesSearch =
-      asig.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asig.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asig.sigla.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCarrera = carreraFilter === 'todas' || asig.carreraId === Number(carreraFilter);
-    return matchesSearch && matchesCarrera;
-  });
-
-  const getCarreraNombre = (carreraId: number) => {
-    return mockCarreras.find(c => c.id === carreraId)?.nombre || 'Desconocida';
-  };
-
-  const handleDeleteAsignatura = (id: number) => {
-    if (confirm('¿Está seguro de eliminar esta asignatura?')) {
-      setAsignaturas(asignaturas.filter((a: Asignatura) => a.id !== id));
-      toast.success('Asignatura eliminada exitosamente');
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [cursosRes, carrerasRes] = await Promise.all([listCursos(), listCarreras()]);
+      setAsignaturas(cursosRes.data);
+      setSource(cursosRes.source);
+      setCarreras(carrerasRes.data);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEditAsignatura = (asignatura: Asignatura) => {
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filteredAsignaturas = asignaturas.filter((asig) => {
+    const matchesSearch =
+      asig.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      asig.sigla.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCarrera = carreraFilter === 'todas' || asig.idCarrera === carreraFilter;
+    return matchesSearch && matchesCarrera;
+  });
+
+  const carreraNombre = (a: CursoAsignatura) =>
+    carreras.find((c) => c.codigo === a.idCarrera)?.nombre ?? a.idCarrera;
+
+  const handleDeleteAsignatura = async (asignatura: CursoAsignatura) => {
+    if (!confirm('¿Está seguro de eliminar esta asignatura?')) return;
+    if (source === 'mock') {
+      setAsignaturas((prev) => prev.filter((a) => a.id !== asignatura.id));
+      toast.success('Asignatura eliminada (modo demo)');
+      return;
+    }
+    try {
+      await deleteCurso(asignatura.idCarrera, asignatura.idCurso);
+      toast.success('Asignatura eliminada exitosamente');
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const handleEditAsignatura = (asignatura: CursoAsignatura) => {
     setEditingAsignatura(asignatura);
     setOpenDialog(true);
   };
 
-  const handleUpdateAsignatura = (updatedAsignatura: Asignatura) => {
-    setAsignaturas(asignaturas.map((a: Asignatura) => a.id === updatedAsignatura.id ? updatedAsignatura : a));
-    setEditingAsignatura(null);
-    setOpenDialog(false);
-    toast.success('Asignatura actualizada exitosamente');
+  const handleSaveAsignatura = async (input: CursoInput) => {
+    if (source === 'mock') {
+      if (editingAsignatura) {
+        setAsignaturas((prev) =>
+          prev.map((a) =>
+            a.id === editingAsignatura.id
+              ? { ...a, nombre: input.nombre, semestre: input.semestre }
+              : a,
+          ),
+        );
+        toast.success('Asignatura actualizada (modo demo)');
+      } else {
+        const nuevo: CursoAsignatura = {
+          id: syntheticCursoId(input.idCarrera, input.sigla),
+          codigo: input.sigla,
+          sigla: input.sigla,
+          nombre: input.nombre,
+          carreraId: 0,
+          lineasIngreso: 1,
+          tipoSeccion: 'Sección',
+          semestre: input.semestre,
+          año: new Date().getFullYear(),
+          idCarrera: input.idCarrera,
+          idCurso: input.sigla,
+        };
+        setAsignaturas((prev) => [...prev, nuevo]);
+        toast.success('Asignatura agregada (modo demo)');
+      }
+      setOpenDialog(false);
+      setEditingAsignatura(null);
+      return;
+    }
+    try {
+      if (editingAsignatura) {
+        await updateCurso(editingAsignatura.idCarrera, editingAsignatura.idCurso, {
+          nombre: input.nombre,
+          semestre: input.semestre,
+          jornada: input.jornada,
+        });
+        toast.success('Asignatura actualizada exitosamente');
+      } else {
+        await createCurso(input);
+        toast.success('Asignatura agregada exitosamente');
+      }
+      setOpenDialog(false);
+      setEditingAsignatura(null);
+      await load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
   };
 
-  // Group by carrera for summary
-  const asignaturasPorCarrera = mockCarreras.map(carrera => ({
-    carrera: carrera.nombre,
-    count: asignaturas.filter((a: Asignatura) => a.carreraId === carrera.id).length
-  })).filter(item => item.count > 0);
+  // Resumen por carrera (usa las carreras cargadas del backend/mock)
+  const asignaturasPorCarrera = carreras
+    .map((carrera) => ({
+      carrera: carrera.nombre,
+      count: asignaturas.filter((a) => a.idCarrera === carrera.codigo).length,
+    }))
+    .filter((item) => item.count > 0);
 
   return (
     <div className="space-y-6">
@@ -90,23 +192,24 @@ export function TablaAsignaturas() {
             </DialogHeader>
             <FormularioAsignatura
               asignatura={editingAsignatura}
+              carreras={carreras}
               onClose={() => {
                 setOpenDialog(false);
                 setEditingAsignatura(null);
               }}
-              onSave={(asignaturaData) => {
-                if (editingAsignatura) {
-                  handleUpdateAsignatura({ ...asignaturaData, id: editingAsignatura.id });
-                } else {
-                  setAsignaturas([...asignaturas, { ...asignaturaData, id: asignaturas.length + 1 }]);
-                  setOpenDialog(false);
-                  toast.success('Asignatura agregada exitosamente');
-                }
-              }}
+              onSave={handleSaveAsignatura}
             />
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Aviso modo demo (backend no disponible) */}
+      {source === 'mock' && (
+        <div className="flex items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+          <WifiOff className="h-4 w-4" />
+          Sin conexión con el backend: mostrando datos de demostración. Los cambios no se guardarán.
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -154,8 +257,8 @@ export function TablaAsignaturas() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas las carreras</SelectItem>
-                {mockCarreras.map((carrera) => (
-                  <SelectItem key={carrera.id} value={carrera.id.toString()}>
+                {carreras.map((carrera) => (
+                  <SelectItem key={carrera.codigo} value={carrera.codigo}>
                     {carrera.nombre}
                   </SelectItem>
                 ))}
@@ -168,9 +271,14 @@ export function TablaAsignaturas() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Registro de Asignaturas</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Registro de Asignaturas
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+          </CardTitle>
           <CardDescription>
-            Mostrando {filteredAsignaturas.length} de {asignaturas.length} asignaturas
+            {loading
+              ? 'Cargando asignaturas...'
+              : `Mostrando ${filteredAsignaturas.length} de ${asignaturas.length} asignaturas`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -187,7 +295,7 @@ export function TablaAsignaturas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAsignaturas.map((asignatura: Asignatura) => {
+                {filteredAsignaturas.map((asignatura: CursoAsignatura) => {
                   const seccionesAsig = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
                   const { total, tieneGrupos } = getEstadoAsignatura(seccionesAsig);
                   const addDeshabilitado = total >= 3 || tieneGrupos;
@@ -203,8 +311,8 @@ export function TablaAsignaturas() {
                     </TableCell>
                     <TableCell className="font-medium">{asignatura.nombre}</TableCell>
                     <TableCell className="max-w-[200px]">
-                      <div className="truncate" title={getCarreraNombre(asignatura.carreraId)}>
-                        {getCarreraNombre(asignatura.carreraId)}
+                      <div className="truncate" title={carreraNombre(asignatura)}>
+                        {carreraNombre(asignatura)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -236,7 +344,7 @@ export function TablaAsignaturas() {
                           variant="ghost"
                           size="sm"
                           title="Eliminar Asignatura"
-                          onClick={() => handleDeleteAsignatura(asignatura.id)}
+                          onClick={() => handleDeleteAsignatura(asignatura)}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
@@ -295,7 +403,7 @@ export function TablaAsignaturas() {
 }
 
 interface FormularioSeccionProps {
-  asignatura: Asignatura;
+  asignatura: CursoAsignatura;
   onClose: () => void;
   onSave: (data: { seccion: number, horasP: number, horasM: number, horasA: number }) => void;
 }
@@ -394,44 +502,55 @@ function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionPro
 }
 
 interface FormularioAsignaturaProps {
-  asignatura?: Asignatura | null;
+  asignatura?: CursoAsignatura | null;
+  carreras: Carrera[];
   onClose: () => void;
-  onSave: (asignatura: Omit<Asignatura, 'id'>) => void;
+  onSave: (input: CursoInput) => void;
 }
 
-function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignaturaProps) {
-  const [formData, setFormData] = useState<Omit<Asignatura, 'id'>>({
-    codigo: asignatura?.codigo || '',
-    sigla: asignatura?.sigla || '',
-    nombre: asignatura?.nombre || '',
-    carreraId: asignatura?.carreraId || 0
-  });
+function FormularioAsignatura({ asignatura, carreras, onClose, onSave }: FormularioAsignaturaProps) {
+  const editing = Boolean(asignatura);
+  const [idCarrera, setIdCarrera] = useState<string>(asignatura?.idCarrera ?? '');
+  const [sigla, setSigla] = useState(asignatura?.sigla ?? '');
+  const [nombre, setNombre] = useState(asignatura?.nombre ?? '');
+  const [semestre, setSemestre] = useState<number>(asignatura?.semestre ?? 1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.codigo || !formData.sigla || !formData.nombre || !formData.carreraId) {
+    if (!idCarrera || !sigla.trim() || !nombre.trim()) {
       toast.error('Complete todos los campos obligatorios');
       return;
     }
+    if (sigla.trim().length > 5) {
+      toast.error('La sigla no puede superar 5 caracteres (es el identificador del curso).');
+      return;
+    }
 
-    onSave(formData);
+    const carrera = carreras.find((c) => c.codigo === idCarrera);
+    const jornada: 'diurno' | 'vespertino' =
+      carrera?.jornada === 'Vespertina' ? 'vespertino' : 'diurno';
+
+    onSave({
+      idCarrera,
+      sigla: sigla.trim().toUpperCase(),
+      nombre: nombre.trim(),
+      semestre,
+      jornada,
+    });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="carreraId">Carrera *</Label>
-        <Select
-          value={formData.carreraId.toString()}
-          onValueChange={(value: string) => setFormData({ ...formData, carreraId: Number(value) })}
-        >
+        <Select value={idCarrera} onValueChange={setIdCarrera} disabled={editing}>
           <SelectTrigger id="carreraId">
             <SelectValue placeholder="Seleccione una carrera" />
           </SelectTrigger>
           <SelectContent>
-            {mockCarreras.map((carrera) => (
-              <SelectItem key={carrera.id} value={carrera.id.toString()}>
+            {carreras.map((carrera) => (
+              <SelectItem key={carrera.codigo} value={carrera.codigo}>
                 {carrera.nombre} ({carrera.jornada})
               </SelectItem>
             ))}
@@ -441,24 +560,31 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <Label htmlFor="codigo">Código *</Label>
+          <Label htmlFor="sigla">Sigla * (identificador del curso)</Label>
           <Input
-            id="codigo"
-            placeholder="INF-101"
-            value={formData.codigo}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })}
+            id="sigla"
+            placeholder="PROG1"
+            value={sigla}
+            maxLength={5}
+            disabled={editing}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSigla(e.target.value.toUpperCase())}
             required
           />
         </div>
         <div>
-          <Label htmlFor="sigla">Sigla *</Label>
-          <Input
-            id="sigla"
-            placeholder="PROG1"
-            value={formData.sigla}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, sigla: e.target.value.toUpperCase() })}
-            required
-          />
+          <Label htmlFor="semestre">Semestre *</Label>
+          <Select value={String(semestre)} onValueChange={(v: string) => setSemestre(Number(v))}>
+            <SelectTrigger id="semestre">
+              <SelectValue placeholder="Semestre" />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4, 5, 6].map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -467,11 +593,18 @@ function FormularioAsignatura({ asignatura, onClose, onSave }: FormularioAsignat
         <Input
           id="nombre"
           placeholder="Programación I"
-          value={formData.nombre}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, nombre: e.target.value })}
+          value={nombre}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNombre(e.target.value)}
           required
         />
       </div>
+
+      {editing && (
+        <p className="text-xs text-gray-500">
+          La carrera y la sigla forman el identificador del curso y no pueden modificarse. Para
+          cambiarlos, elimine y vuelva a crear la asignatura.
+        </p>
+      )}
 
       <div className="flex gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onClose} className="flex-1">
