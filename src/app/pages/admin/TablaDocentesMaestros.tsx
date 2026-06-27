@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, BookOpen, X, Loader2, WifiOff } from 'lucide-react';
-import { mockSeccionesAsignaturas, mockAsignaturas, formatRUT, type DocenteMaestro } from '../../data/mockData';
+import { mockAsignaturas, formatRUT, type DocenteMaestro, type SeccionAsignatura } from '../../data/mockData';
+import { listGrupos, updateGrupo } from '../../data/grupos';
 import {
   listDocentes,
   createDocente,
@@ -34,6 +35,7 @@ function errMsg(err: unknown): string {
 
 export function TablaDocentesMaestros() {
   const [docentes, setDocentes] = useState<DocenteMaestro[]>([]);
+  const [secciones, setSecciones] = useState<SeccionAsignatura[]>([]);
   const [source, setSource] = useState<DataSource>('backend');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,9 +49,10 @@ export function TablaDocentesMaestros() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await listDocentes();
+      const [res, gruposRes] = await Promise.all([listDocentes(), listGrupos()]);
       setDocentes(res.data);
       setSource(res.source);
+      setSecciones(gruposRes.data);
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -59,6 +62,9 @@ export function TablaDocentesMaestros() {
 
   useEffect(() => {
     void load();
+    const handler = () => load();
+    window.addEventListener('grupos:update', handler);
+    return () => window.removeEventListener('grupos:update', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -67,21 +73,37 @@ export function TablaDocentesMaestros() {
     setOpenRamosDialog(true);
   };
 
-  const asignarSeccion = (seccionId: number) => {
+  const asignarSeccion = async (seccionId: number) => {
     if (!docenteRamos) return;
-    const seccion = mockSeccionesAsignaturas.find(s => s.id === seccionId);
+    const seccion = secciones.find(s => s.id === seccionId);
     if (!seccion) return;
-    seccion.docenteId = docenteRamos.id;
-    setSeccionesVersion(v => v + 1);
-    toast.success('Ramo asignado');
+    try {
+      await updateGrupo(seccionId, {
+        subGrupo: seccion.subGrupo,
+        docenteId: docenteRamos.id,
+        horasP: seccion.horasP,
+        horasM: seccion.horasM,
+        horasA: seccion.horasA
+      });
+      window.dispatchEvent(new Event('grupos:update'));
+      toast.success('Ramo asignado');
+    } catch (e) { toast.error('Error al asignar ramo'); }
   };
 
-  const quitarSeccion = (seccionId: number) => {
-    const seccion = mockSeccionesAsignaturas.find(s => s.id === seccionId);
+  const quitarSeccion = async (seccionId: number) => {
+    const seccion = secciones.find(s => s.id === seccionId);
     if (!seccion) return;
-    seccion.docenteId = undefined;
-    setSeccionesVersion(v => v + 1);
-    toast.success('Ramo desasignado');
+    try {
+      await updateGrupo(seccionId, {
+        subGrupo: seccion.subGrupo,
+        docenteId: null,
+        horasP: seccion.horasP,
+        horasM: seccion.horasM,
+        horasA: seccion.horasA
+      });
+      window.dispatchEvent(new Event('grupos:update'));
+      toast.success('Ramo desasignado');
+    } catch (e) { toast.error('Error al desasignar ramo'); }
   };
 
   const filteredDocentes = docentes.filter(
@@ -148,12 +170,9 @@ export function TablaDocentesMaestros() {
   const docentesSinNivel = docentes.filter(d => !d.nivelDocente).length;
 
   // Obtener ramos asignados a un docente
-  // (depende de seccionesVersion para refrescar tras mutar el mock)
   const getRamosAsignados = (docenteId: number): string[] => {
-    // referencia muda al counter para que React detecte la dependencia
-    void seccionesVersion;
-    const secciones = mockSeccionesAsignaturas.filter(s => s.docenteId === docenteId);
-    const asignaturasIds = [...new Set(secciones.map(s => s.asignaturaId))];
+    const secs = secciones.filter(s => s.docenteId === docenteId);
+    const asignaturasIds = [...new Set(secs.map(s => s.asignaturaId))];
     return asignaturasIds.map(id => {
       const asig = mockAsignaturas.find(a => a.id === id);
       return asig ? asig.nombre : '';
@@ -162,8 +181,7 @@ export function TablaDocentesMaestros() {
 
   // Detalle de secciones para el dialog de edición
   const getSeccionesDelDocente = (docenteId: number) => {
-    void seccionesVersion;
-    return mockSeccionesAsignaturas
+    return secciones
       .filter(s => s.docenteId === docenteId)
       .map(s => ({
         ...s,
@@ -172,9 +190,8 @@ export function TablaDocentesMaestros() {
   };
 
   const getSeccionesDisponibles = () => {
-    void seccionesVersion;
-    return mockSeccionesAsignaturas
-      .filter(s => s.docenteId === undefined)
+    return secciones
+      .filter(s => s.docenteId === undefined || s.docenteId === null)
       .map(s => ({
         ...s,
         asignatura: mockAsignaturas.find(a => a.id === s.asignaturaId)

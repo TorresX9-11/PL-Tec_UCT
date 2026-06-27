@@ -15,13 +15,15 @@ type GrupoRow = Grupo & RowDataPacket;
 
 export async function listGrupos(): Promise<Grupo[]> {
   const [rows] = await pool.execute<GrupoRow[]>(
-    'SELECT id_grupo, id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo FROM grupos ORDER BY id_grupo ASC',
+    'SELECT id_grupo, id_carrera, id_curso, seccion, subgrupo, rut_docente, horas_presencial, horas_mixto, horas_administrativo FROM grupos ORDER BY id_grupo ASC',
   );
-  return rows.map(({ id_grupo, id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo }) => ({
+  return rows.map(({ id_grupo, id_carrera, id_curso, seccion, subgrupo, rut_docente, horas_presencial, horas_mixto, horas_administrativo }) => ({
     id_grupo,
     id_carrera,
     id_curso,
     seccion,
+    subgrupo,
+    rut_docente,
     horas_presencial,
     horas_mixto,
     horas_administrativo,
@@ -30,7 +32,7 @@ export async function listGrupos(): Promise<Grupo[]> {
 
 export async function findGrupoById(id: number): Promise<Grupo | null> {
   const [rows] = await pool.execute<GrupoRow[]>(
-    'SELECT id_grupo, id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo FROM grupos WHERE id_grupo = :id LIMIT 1',
+    'SELECT id_grupo, id_carrera, id_curso, seccion, subgrupo, rut_docente, horas_presencial, horas_mixto, horas_administrativo FROM grupos WHERE id_grupo = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
@@ -40,6 +42,8 @@ export async function findGrupoById(id: number): Promise<Grupo | null> {
     id_carrera: row.id_carrera,
     id_curso: row.id_curso,
     seccion: row.seccion,
+    subgrupo: row.subgrupo,
+    rut_docente: row.rut_docente,
     horas_presencial: row.horas_presencial,
     horas_mixto: row.horas_mixto,
     horas_administrativo: row.horas_administrativo,
@@ -52,13 +56,15 @@ export async function createGrupo(input: CreateGrupoInput): Promise<Grupo> {
     id_carrera: input.id_carrera,
     id_curso: input.id_curso,
     seccion: input.seccion,
+    subgrupo: input.subgrupo ?? null,
+    rut_docente: input.rut_docente ?? null,
     horas_presencial: input.horas_presencial ?? null,
     horas_mixto: input.horas_mixto ?? null,
     horas_administrativo: input.horas_administrativo ?? null,
   };
 
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO grupos (id_carrera, id_curso, seccion, horas_presencial, horas_mixto, horas_administrativo) VALUES (:id_carrera, :id_curso, :seccion, :horas_presencial, :horas_mixto, :horas_administrativo)',
+    'INSERT INTO grupos (id_carrera, id_curso, seccion, subgrupo, rut_docente, horas_presencial, horas_mixto, horas_administrativo) VALUES (:id_carrera, :id_curso, :seccion, :subgrupo, :rut_docente, :horas_presencial, :horas_mixto, :horas_administrativo)',
     dbInput,
   );
 
@@ -87,6 +93,14 @@ export async function updateGrupo(
   if (input.seccion !== undefined) {
     updates.push('seccion = :seccion');
     params.seccion = input.seccion;
+  }
+  if (input.subgrupo !== undefined) {
+    updates.push('subgrupo = :subgrupo');
+    params.subgrupo = input.subgrupo;
+  }
+  if (input.rut_docente !== undefined) {
+    updates.push('rut_docente = :rut_docente');
+    params.rut_docente = input.rut_docente;
   }
   if (input.horas_presencial !== undefined) {
     updates.push('horas_presencial = :horas_presencial');

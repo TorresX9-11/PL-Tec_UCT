@@ -41,49 +41,115 @@ export async function findPropuestaById(id: number): Promise<Propuesta | null> {
 }
 
 export async function createPropuesta(input: CreatePropuestaInput): Promise<Propuesta> {
-  const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO propuestas (rut_docente, valor_propuesta, cuotas) VALUES (:rut_docente, :valor_propuesta, :cuotas)',
-    input,
-  );
-  return {
-    id_propuesta: result.insertId as number,
-    ...input,
-  };
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      'INSERT INTO propuestas (rut_docente, valor_propuesta, cuotas) VALUES (:rut_docente, :valor_propuesta, :cuotas)',
+      input,
+    );
+    const id_propuesta = result.insertId as number;
+
+    const MESES = ['marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    for (let i = 0; i < input.cuotas; i++) {
+      const mes = MESES[i] || 'diciembre';
+      await connection.execute(
+        'INSERT INTO pagos (id_propuesta, mes, estado_pago, estado_boleta) VALUES (:id_propuesta, :mes, :estado_pago, :estado_boleta)',
+        {
+          id_propuesta,
+          mes,
+          estado_pago: 'Pendiente',
+          estado_boleta: 'Faltante'
+        }
+      );
+    }
+
+    await connection.commit();
+    return {
+      id_propuesta,
+      ...input,
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function updatePropuesta(
   id: number,
   input: UpdatePropuestaInput,
 ): Promise<Propuesta | null> {
-  // Construir query dinámica solo con campos proporcionados
-  const updates: string[] = [];
-  const params: Record<string, string | number> = { id };
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (input.rut_docente !== undefined) {
-    updates.push('rut_docente = :rut_docente');
-    params.rut_docente = input.rut_docente;
-  }
-  if (input.valor_propuesta !== undefined) {
-    updates.push('valor_propuesta = :valor_propuesta');
-    params.valor_propuesta = input.valor_propuesta;
-  }
-  if (input.cuotas !== undefined) {
-    updates.push('cuotas = :cuotas');
-    params.cuotas = input.cuotas;
-  }
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      'SELECT cuotas FROM propuestas WHERE id_propuesta = :id LIMIT 1',
+      { id }
+    );
+    if (rows.length === 0) {
+      await connection.rollback();
+      return null;
+    }
 
-  if (updates.length === 0) {
-    // Si no hay campos para actualizar, retornar la propuesta existente
+    const oldCuotas = rows[0].cuotas;
+
+    const updates: string[] = [];
+    const params: Record<string, string | number> = { id };
+
+    if (input.rut_docente !== undefined) {
+      updates.push('rut_docente = :rut_docente');
+      params.rut_docente = input.rut_docente;
+    }
+    if (input.valor_propuesta !== undefined) {
+      updates.push('valor_propuesta = :valor_propuesta');
+      params.valor_propuesta = input.valor_propuesta;
+    }
+    if (input.cuotas !== undefined) {
+      updates.push('cuotas = :cuotas');
+      params.cuotas = input.cuotas;
+    }
+
+    if (updates.length > 0) {
+      const query = `UPDATE propuestas SET ${updates.join(', ')} WHERE id_propuesta = :id`;
+      await connection.execute(query, params);
+    }
+
+    if (input.cuotas !== undefined && input.cuotas !== oldCuotas) {
+      const [pagosPagados] = await connection.execute<RowDataPacket[]>(
+        "SELECT id_pago FROM pagos WHERE id_propuesta = :id AND estado_pago = 'Pagada' LIMIT 1",
+        { id }
+      );
+      if (pagosPagados.length === 0) {
+        await connection.execute('DELETE FROM pagos WHERE id_propuesta = :id', { id });
+        
+        const MESES = ['marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        for (let i = 0; i < input.cuotas; i++) {
+          const mes = MESES[i] || 'diciembre';
+          await connection.execute(
+            'INSERT INTO pagos (id_propuesta, mes, estado_pago, estado_boleta) VALUES (:id_propuesta, :mes, :estado_pago, :estado_boleta)',
+            {
+              id_propuesta: id,
+              mes,
+              estado_pago: 'Pendiente',
+              estado_boleta: 'Faltante'
+            }
+          );
+        }
+      }
+    }
+
+    await connection.commit();
     return await findPropuestaById(id);
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
-
-  const query = `UPDATE propuestas SET ${updates.join(', ')} WHERE id_propuesta = :id`;
-  const [result] = await pool.execute<ResultSetHeader>(query, params);
-
-  if (result.affectedRows === 0) return null;
-
-  // Retornar propuesta actualizada
-  return await findPropuestaById(id);
 }
 
 export async function deletePropuesta(id: number): Promise<boolean> {

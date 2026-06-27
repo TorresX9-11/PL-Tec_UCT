@@ -70,7 +70,14 @@ export function CorreosMasivos() {
 
   // Refresco en vivo si la Bandeja cambia algo (afecta los grupos por estado).
   const [version, setVersion] = useState(0);
-  useEffect(() => subscribePagosAdmin(() => setVersion(v => v + 1)), []);
+
+  useEffect(() => {
+    const handler = () => setVersion(v => v + 1);
+    window.addEventListener('pagos:update', handler);
+    return () => {
+      window.removeEventListener('pagos:update', handler);
+    };
+  }, []);
 
   // Estado del formulario
   const [grupo, setGrupo] = useState<GrupoPreset>(grupoInicial);

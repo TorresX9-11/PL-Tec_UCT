@@ -55,14 +55,17 @@ CREATE TABLE IF NOT EXISTS cursos (
 CREATE TABLE IF NOT EXISTS grupos (
   id_grupo             INT AUTO_INCREMENT NOT NULL,
   id_carrera           VARCHAR(4)  NOT NULL,
-  id_curso             VARCHAR(4)  NOT NULL,
+  id_curso             VARCHAR(5)  NOT NULL,
   jornada           ENUM('diurno', 'vespertino'),
   seccion              ENUM('1', '2', '3') NOT NULL DEFAULT '1',
+  subgrupo             ENUM('A', 'B') DEFAULT NULL,
+  rut_docente          INT DEFAULT NULL,
   horas_presencial     TINYINT,
   horas_mixto          TINYINT,
   horas_administrativo TINYINT,
   PRIMARY KEY (id_grupo),
-  FOREIGN KEY (id_carrera, id_curso, jornada) REFERENCES cursos(id_carrera, id_curso, jornada)
+  FOREIGN KEY (id_carrera, id_curso) REFERENCES cursos(id_carrera, id_curso),
+  FOREIGN KEY (rut_docente) REFERENCES docentes(rut_docente)
 );
 
 -- ----------------------------------------------------------------------------
@@ -101,6 +104,9 @@ CREATE TABLE IF NOT EXISTS pagos (
                     'mayo','junio','julio','agosto',
                     'septiembre','octubre','noviembre','diciembre') NOT NULL,
   notas        TEXT(32767),
+  estado_pago  ENUM('Pendiente', 'Pagada') DEFAULT 'Pendiente',
+  fecha_pago   DATE,
+  estado_boleta ENUM('Faltante', 'Subida', 'Procesada', 'Con Observación') DEFAULT 'Faltante',
   PRIMARY KEY (id_pago),
   FOREIGN KEY (id_propuesta) REFERENCES propuestas(id_propuesta)
 );

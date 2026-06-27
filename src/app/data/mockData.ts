@@ -407,10 +407,11 @@ export function calcularPropuestaSemestral(
   docenteId: number,
   semestre: number,
   año: number,
-  valorPropuesta: number = 0
+  valorPropuesta: number = 0,
+  seccionesFuente: SeccionAsignatura[] = mockSeccionesAsignaturas
 ): PropuestaSemestral {
   // Obtener todas las secciones del docente
-  const seccionesDocente = mockSeccionesAsignaturas.filter(s => s.docenteId === docenteId);
+  const seccionesDocente = seccionesFuente.filter(s => s.docenteId === docenteId);
 
   // Filtrar por semestre y año de las asignaturas
   const seccionesFiltradas = seccionesDocente.filter(seccion => {

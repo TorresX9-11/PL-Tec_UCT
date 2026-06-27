@@ -3,10 +3,7 @@ import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, Me
 import {
   mockPropuestasSemestrales,
   mockDocentesMaestros,
-  mockSeccionesAsignaturas,
   mockAsignaturas,
-  calcularPropuestaSemestral,
-  getCuotasDocente,
   type PropuestaSemestral,
   type CuotaMensual
 } from '../../data/mockData';
@@ -16,6 +13,12 @@ import {
   subscribeMensajes,
   type MensajesPorCuota
 } from '../../data/mensajesAdmin';
+import { listPropuestas, updatePropuesta, createPropuesta } from '../../data/propuestas';
+import { listPagos } from '../../data/pagos';
+import { listGrupos } from '../../data/grupos';
+import { listDocentes } from '../../data/docentes';
+import { listCursos } from '../../data/cursos';
+import { listCarreras } from '../../data/carreras';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
@@ -32,21 +35,7 @@ const SEMESTRE_ACTUAL = 1;
 const AÑO_ACTUAL = 2026;
 const STORAGE_KEY_VALORES = 'valores_propuesta_manual';
 
-// Overrides de demo: estado de pago/boletas que vienen del mock.
-// Cuando exista el backend NestJS, este mapa se reemplaza por la data real.
-const overridesDemo: Record<number, Partial<PropuestaSemestral>> = mockPropuestasSemestrales.reduce(
-  (acc, p) => {
-    acc[p.docenteId] = {
-      estadoPago: p.estadoPago,
-      cuotasPagadas: p.cuotasPagadas,
-      boletasSubidas: p.boletasSubidas,
-      boletasEstado: p.boletasEstado,
-      recepcionBHE: p.recepcionBHE
-    };
-    return acc;
-  },
-  {} as Record<number, Partial<PropuestaSemestral>>
-);
+// Mocks de demo removidos, los estados se leen directamente de la base de datos de pagos.
 
 export function TablaPropuestasSemestrales() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,49 +45,131 @@ export function TablaPropuestasSemestrales() {
   const [propuestaEnEdicion, setPropuestaEnEdicion] = useState<PropuestaSemestral | null>(null);
   const [valorInput, setValorInput] = useState<number>(0);
 
-  // Valor total manual por docente (persistido en localStorage)
-  const [valoresManuales, setValoresManuales] = useState<Record<number, number>>(() => {
+  const [propuestasBackend, setPropuestasBackend] = useState<any[]>([]);
+  const [secciones, setSecciones] = useState<any[]>([]);
+  const [pagosBackend, setPagosBackend] = useState<any[]>([]);
+  const [docentesBackend, setDocentesBackend] = useState<any[]>([]);
+  const [cursosBackend, setCursosBackend] = useState<any[]>([]);
+  const [carrerasBackend, setCarrerasBackend] = useState<any[]>([]);
+
+  const fetchData = async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_VALORES);
-      if (stored) return JSON.parse(stored);
-    } catch { /* ignore */ }
-    // Seed inicial con los valores del mock para que la primera carga muestre datos
-    return mockPropuestasSemestrales.reduce((acc, p) => {
-      acc[p.docenteId] = p.montoTotalPropuesta;
-      return acc;
-    }, {} as Record<number, number>);
-  });
+      const [resPropuestas, resGrupos, resPagos, resDocentes, resCursos, resCarreras] = await Promise.all([
+        listPropuestas(),
+        listGrupos(),
+        listPagos(),
+        listDocentes(),
+        listCursos(),
+        listCarreras()
+      ]);
+      setPropuestasBackend(resPropuestas.data);
+      setSecciones(resGrupos.data);
+      setPagosBackend(resPagos.data);
+      setDocentesBackend(resDocentes.data);
+      setCursosBackend(resCursos.data);
+      setCarrerasBackend(resCarreras.data);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al cargar datos');
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_VALORES, JSON.stringify(valoresManuales));
-  }, [valoresManuales]);
+    fetchData();
+    const handler = () => fetchData();
+    window.addEventListener('propuestas:update', handler);
+    window.addEventListener('grupos:update', handler);
+    return () => {
+      window.removeEventListener('propuestas:update', handler);
+      window.removeEventListener('grupos:update', handler);
+    };
+  }, []);
 
-  // Recalcula propuestas en vivo a partir de las secciones asignadas + valor manual
+  // Recalcula propuestas en vivo a partir de las secciones asignadas + valor real
   const propuestas = useMemo<PropuestaSemestral[]>(() => {
     const docenteIds = Array.from(
       new Set(
-        mockSeccionesAsignaturas
+        secciones
           .map(s => s.docenteId)
-          .filter((id): id is number => typeof id === 'number')
+          .filter((id): id is number => typeof id === 'number' && id !== null)
       )
     );
     return docenteIds
       .map(docenteId => {
-        const valor = valoresManuales[docenteId] ?? 0;
-        const base = calcularPropuestaSemestral(docenteId, SEMESTRE_ACTUAL, AÑO_ACTUAL, valor);
-        if (base.totalHoras === 0) return null;
-        const override = overridesDemo[docenteId] ?? {};
-        const cuotasPagadas = override.cuotasPagadas ?? 0;
+        const propBackend = propuestasBackend.find(p => p.docenteId === docenteId);
+        const valor = propBackend ? propBackend.montoTotalPropuesta : 0;
+        
+        const seccionesDocente = secciones.filter(s => s.docenteId === docenteId);
+        const totalHorasP = seccionesDocente.reduce((sum, s) => sum + s.horasP, 0);
+        const totalHorasM = seccionesDocente.reduce((sum, s) => sum + s.horasM, 0);
+        const totalHorasA = seccionesDocente.reduce((sum, s) => sum + s.horasA, 0);
+        const totalHoras = totalHorasP + totalHorasM + totalHorasA;
+        if (totalHoras === 0) return null;
+
+        let numeroCuotas = propBackend ? propBackend.numeroCuotas : 4; 
+        if (!propBackend && seccionesDocente.length > 0) {
+            const asig = cursosBackend.find(c => c.id === seccionesDocente[0].asignaturaId);
+            const carrera = carrerasBackend.find(c => c.codigo === asig?.idCarrera);
+            if (carrera?.jornada === 'Vespertina' || carrera?.jornada === 'vespertino') {
+                numeroCuotas = 5;
+            }
+        }
+
+        const base = {
+           id: docenteId,
+           docenteId,
+           semestre: SEMESTRE_ACTUAL,
+           año: AÑO_ACTUAL,
+           totalHorasP,
+           totalHorasM,
+           totalHorasA,
+           totalHoras,
+           montoTotalPropuesta: valor,
+           numeroCuotas,
+           valorCuotaBruto: numeroCuotas > 0 ? Math.round(valor / numeroCuotas) : 0,
+        };
+
+        let cuotasPagadas = 0;
+        let estadoPago = 'Pendiente';
+        let boletasSubidas = 0;
+        let boletasEstado = 'Sin Boletas';
+
+        if (propBackend) {
+          const pagosPropuesta = pagosBackend.filter(p => p.propuestaId === propBackend.id);
+          cuotasPagadas = pagosPropuesta.filter(p => p.estadoPago === 'Pagada').length;
+          
+          if (cuotasPagadas === base.numeroCuotas && base.numeroCuotas > 0) {
+            estadoPago = 'Pagado';
+          } else if (cuotasPagadas > 0) {
+            estadoPago = 'En Proceso';
+          }
+
+          const boletasOK = pagosPropuesta.filter(p => ['Subida', 'Procesada', 'Con Observación'].includes(p.boletaEstado)).length;
+          boletasSubidas = boletasOK;
+          
+          if (boletasSubidas === base.numeroCuotas && base.numeroCuotas > 0) {
+            boletasEstado = 'Todas OK';
+          } else if (boletasSubidas > 0) {
+            boletasEstado = 'Incompletas';
+          }
+        }
+
         const pagado = cuotasPagadas * base.valorCuotaBruto;
+        
         return {
           ...base,
-          ...override,
-          saldo: Math.max(base.montoTotalPropuesta - pagado, 0)
+          id: propBackend?.id ?? base.id,
+          saldo: Math.max(base.montoTotalPropuesta - pagado, 0),
+          cuotasPagadas,
+          estadoPago,
+          boletasSubidas,
+          boletasEstado,
+          recepcionBHE: boletasSubidas > 0
         } as PropuestaSemestral;
       })
       .filter((p): p is PropuestaSemestral => p !== null)
       .sort((a, b) => a.docenteId - b.docenteId);
-  }, [valoresManuales]);
+  }, [propuestasBackend, secciones, pagosBackend, cursosBackend, carrerasBackend]);
 
   const abrirEditarValor = (prop: PropuestaSemestral) => {
     setPropuestaEnEdicion(prop);
@@ -106,25 +177,39 @@ export function TablaPropuestasSemestrales() {
     setEditValorOpen(true);
   };
 
-  const guardarValor = () => {
+  const guardarValor = async () => {
     if (!propuestaEnEdicion) return;
     if (valorInput < 0) {
       toast.error('El valor total no puede ser negativo');
       return;
     }
-    setValoresManuales((prev: Record<number, number>) => ({
-      ...prev,
-      [propuestaEnEdicion.docenteId]: valorInput
-    }));
-    toast.success('Valor total actualizado');
+    try {
+      const propBackend = propuestasBackend.find(p => p.docenteId === propuestaEnEdicion.docenteId);
+      if (propBackend) {
+        await updatePropuesta(propBackend.id, {
+          montoTotalPropuesta: valorInput,
+          numeroCuotas: propuestaEnEdicion.numeroCuotas
+        });
+      } else {
+        await createPropuesta({
+          docenteId: propuestaEnEdicion.docenteId,
+          montoTotalPropuesta: valorInput,
+          numeroCuotas: propuestaEnEdicion.numeroCuotas
+        });
+      }
+      toast.success('Valor total actualizado');
+      window.dispatchEvent(new Event('propuestas:update'));
+    } catch(e) {
+      toast.error('Error al guardar propuesta');
+    }
     setEditValorOpen(false);
     setPropuestaEnEdicion(null);
   };
 
   const filteredPropuestas = propuestas.filter((prop) => {
-    const docente = mockDocentesMaestros.find(d => d.id === prop.docenteId);
-    const matchesSearch = docente?.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          docente?.rut.includes(searchTerm);
+    const docente = docentesBackend.find(d => d.id === prop.docenteId);
+    const matchesSearch = (docente?.nombreCompleto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (docente?.rut || '').includes(searchTerm);
     const matchesEstado = estadoFilter === 'todos' || prop.estadoPago === estadoFilter;
     const matchesBoletas = boletasFilter === 'todos' || prop.boletasEstado === boletasFilter;
     return matchesSearch && matchesEstado && matchesBoletas;
@@ -139,7 +224,7 @@ export function TablaPropuestasSemestrales() {
   };
 
   const getDocenteNombre = (docenteId: number) => {
-    const docente = mockDocentesMaestros.find(d => d.id === docenteId);
+    const docente = docentesBackend.find(d => d.id === docenteId);
     return docente?.nombreCompleto || 'Desconocido';
   };
 
@@ -180,14 +265,14 @@ export function TablaPropuestasSemestrales() {
   };
 
   const getDocenteRut = (docenteId: number) => {
-    return mockDocentesMaestros.find(d => d.id === docenteId)?.rut || '-';
+    return docentesBackend.find(d => d.id === docenteId)?.rut || '-';
   };
 
   const getDocenteNivel = (docenteId: number) => {
-    return mockDocentesMaestros.find(d => d.id === docenteId)?.nivelDocente;
+    return docentesBackend.find(d => d.id === docenteId)?.nivelDocente;
   };
 
-  const docentesSinNivel = mockDocentesMaestros.filter(d => !d.nivelDocente).length;
+  const docentesSinNivel = docentesBackend.filter(d => !d.nivelDocente).length;
 
   const getEstadoBadge = (estado: PropuestaSemestral['estadoPago']) => {
     const variants = {
@@ -450,19 +535,26 @@ export function TablaPropuestasSemestrales() {
                           </Button>
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" title="Ver detalle">
-                                <Eye className="h-4 w-4" />
+                              <Button variant="outline" size="sm">
+                                <Eye className="w-4 h-4 mr-1" />
+                                Ver Detalle
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="flex max-h-[95vh] max-w-[95vw] sm:max-w-[95vw] w-[95vw] flex-col overflow-hidden p-0">
-                              <DialogHeader className="shrink-0 border-b px-6 py-4">
+                            <DialogContent className="max-w-[95vw] md:max-w-5xl lg:max-w-6xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
                                 <DialogTitle>Detalle de Propuesta</DialogTitle>
                                 <DialogDescription>
                                   {getDocenteNombre(prop.docenteId)} • {prop.semestre}-{prop.año}
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="flex-1 overflow-y-auto px-6 py-4">
-                                <DetallePropuesta propuesta={prop} />
+                                <DetallePropuesta 
+                                  propuesta={prop} 
+                                  secciones={secciones}
+                                  docentesBackend={docentesBackend}
+                                  cursosBackend={cursosBackend}
+                                  pagosBackend={pagosBackend}
+                                />
                               </div>
                             </DialogContent>
                           </Dialog>
@@ -571,19 +663,23 @@ export function TablaPropuestasSemestrales() {
 
 interface DetallePropuestaProps {
   propuesta: PropuestaSemestral;
+  secciones: any[];
+  docentesBackend: any[];
+  cursosBackend: any[];
+  pagosBackend: any[];
 }
 
-function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
-  const docente = mockDocentesMaestros.find(d => d.id === propuesta.docenteId);
+function DetallePropuesta({ propuesta, secciones, docentesBackend, cursosBackend, pagosBackend }: DetallePropuestaProps) {
+  const docente = docentesBackend.find(d => d.id === propuesta.docenteId);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
   };
 
   // --- Cambio 2: Ramos asignados al docente ---
-  const seccionesDocente = mockSeccionesAsignaturas.filter(s => s.docenteId === propuesta.docenteId);
+  const seccionesDocente = secciones.filter(s => s.docenteId === propuesta.docenteId);
   const ramosDocente = seccionesDocente.map(sec => {
-    const asignatura = mockAsignaturas.find(a => a.id === sec.asignaturaId);
+    const asignatura = cursosBackend.find(a => a.id === sec.asignaturaId);
     return {
       id: sec.id,
       nombre: asignatura?.nombre ?? 'Desconocida',
@@ -600,10 +696,16 @@ function DetallePropuesta({ propuesta }: DetallePropuestaProps) {
   const totalRamosA = ramosDocente.reduce((s, r) => s + r.horasA, 0);
   const totalRamosHoras = totalRamosP + totalRamosM + totalRamosA;
 
-  // --- Cuotas reales del docente (desde mockData, base para sincronizar con docente) ---
+  // --- Cuotas reales del docente (desde backend pagos) ---
   const cuotasDocente: CuotaMensual[] = useMemo(
-    () => getCuotasDocente(propuesta.docenteId, propuesta.semestre, propuesta.año),
-    [propuesta.docenteId, propuesta.semestre, propuesta.año]
+    () => pagosBackend
+      .filter((p: CuotaMensual) => p.propuestaId === propuesta.id)
+      .map((p, idx) => ({
+        ...p,
+        numeroCuota: idx + 1,
+        montoBruto: propuesta.valorCuotaBruto
+      })),
+    [pagosBackend, propuesta.id, propuesta.valorCuotaBruto]
   );
 
   // --- Cambio 3: Mensajes/notas por cuota (centralizado en mensajesAdmin.ts) ---

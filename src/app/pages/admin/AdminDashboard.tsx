@@ -8,12 +8,18 @@ import {
   getCuotasAdmin,
   type CuotaConContexto
 } from '../../data/mockData';
-import { subscribePagosAdmin } from '../../data/pagosAdmin';
 
 export function AdminDashboard() {
   // Refresco en vivo cuando el admin de pagos cambia algo desde la Bandeja.
   const [version, setVersion] = useState(0);
-  useEffect(() => subscribePagosAdmin(() => setVersion(v => v + 1)), []);
+
+  useEffect(() => {
+    const handler = () => setVersion(v => v + 1);
+    window.addEventListener('pagos:update', handler);
+    return () => {
+      window.removeEventListener('pagos:update', handler);
+    };
+  }, []);
 
   // ── Datos canónicos del semestre activo ───────────────────────────────────
   // `getCuotasAdmin()` ya enriquece cada cuota con su docente, propuesta y boleta.

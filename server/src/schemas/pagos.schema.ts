@@ -21,6 +21,12 @@ export const MesSchema = z.enum([
 ]);
 export type Mes = z.infer<typeof MesSchema>;
 
+export const EstadoPagoSchema = z.enum(['Pendiente', 'Pagada']);
+export type EstadoPago = z.infer<typeof EstadoPagoSchema>;
+
+export const EstadoBoletaSchema = z.enum(['Faltante', 'Subida', 'Procesada', 'Con Observación']);
+export type EstadoBoleta = z.infer<typeof EstadoBoletaSchema>;
+
 /**
  * Representación completa de un pago (output / row de DB).
  */
@@ -29,6 +35,9 @@ export const PagoSchema = z.object({
   id_propuesta: z.number().int().positive(),
   mes: MesSchema,
   notas: z.string().nullable(),
+  estado_pago: EstadoPagoSchema.nullable().default('Pendiente'),
+  fecha_pago: z.string().nullable().optional(), // 'YYYY-MM-DD'
+  estado_boleta: EstadoBoletaSchema.nullable().default('Faltante'),
 });
 export type Pago = z.infer<typeof PagoSchema>;
 
@@ -40,6 +49,9 @@ export const CreatePagoSchema = z.object({
   id_propuesta: z.coerce.number().int().positive(),
   mes: MesSchema,
   notas: z.string().trim().nullable().optional(),
+  estado_pago: EstadoPagoSchema.optional(),
+  fecha_pago: z.string().optional(),
+  estado_boleta: EstadoBoletaSchema.optional(),
 });
 export type CreatePagoInput = z.infer<typeof CreatePagoSchema>;
 
@@ -50,6 +62,9 @@ export const UpdatePagoSchema = z.object({
   id_propuesta: z.coerce.number().int().positive().optional(),
   mes: MesSchema.optional(),
   notas: z.string().trim().nullable().optional(),
+  estado_pago: EstadoPagoSchema.optional(),
+  fecha_pago: z.string().nullable().optional(),
+  estado_boleta: EstadoBoletaSchema.optional(),
 });
 export type UpdatePagoInput = z.infer<typeof UpdatePagoSchema>;
 

@@ -49,14 +49,18 @@ function badgeEstado(estado: string) {
 }
 
 export function Historial() {
-  const [registros, setRegistros] = useState<RegistroHistorial[]>(() => getHistorial());
+  const [version, setVersion] = useState(0);
+  const registros = useMemo(() => getHistorial(), [version]);
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [filtroModulo, setFiltroModulo] = useState<string>('todos');
 
-  // Recalcular cuando cambien pagos/boletas (overrides en localStorage).
   useEffect(() => {
-    return subscribePagosAdmin(() => setRegistros(getHistorial()));
+    const handler = () => setVersion(v => v + 1);
+    window.addEventListener('pagos:update', handler);
+    return () => {
+      window.removeEventListener('pagos:update', handler);
+    };
   }, []);
 
   const modulos = useMemo(

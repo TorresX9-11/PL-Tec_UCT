@@ -26,7 +26,6 @@ import {
   subscribeMensajes,
   type MensajesPorCuota
 } from '../../data/mensajesAdmin';
-import { subscribePagosAdmin } from '../../data/pagosAdmin';
 import { useLocation } from 'react-router';
 
 const MESES = [
@@ -64,7 +63,10 @@ export function DocenteBoletas() {
 
   // Refresco en vivo cuando el admin de pagos cambia el estado de una boleta
   // o registra/revierte el pago de una cuota.
-  useEffect(() => subscribePagosAdmin(bump), []);
+  useEffect(() => {
+    window.addEventListener('pagos:update', bump);
+    return () => window.removeEventListener('pagos:update', bump);
+  }, []);
 
   // Deep-link via hash: cuando se llega con #cuota-{id} (p.ej. desde el toast de
   // notificación del DocenteLayout), scrollear al elemento y aplicar un highlight

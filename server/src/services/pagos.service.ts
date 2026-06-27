@@ -15,19 +15,22 @@ type PagoRow = Pago & RowDataPacket;
 
 export async function listPagos(): Promise<Pago[]> {
   const [rows] = await pool.execute<PagoRow[]>(
-    'SELECT id_pago, id_propuesta, mes, notas FROM pagos ORDER BY id_pago ASC',
+    "SELECT id_pago, id_propuesta, mes, notas, estado_pago, DATE_FORMAT(fecha_pago, '%Y-%m-%d') as fecha_pago, estado_boleta FROM pagos ORDER BY id_pago ASC",
   );
-  return rows.map(({ id_pago, id_propuesta, mes, notas }) => ({
+  return rows.map(({ id_pago, id_propuesta, mes, notas, estado_pago, fecha_pago, estado_boleta }) => ({
     id_pago,
     id_propuesta,
     mes,
     notas,
+    estado_pago,
+    fecha_pago,
+    estado_boleta,
   }));
 }
 
 export async function findPagoById(id: number): Promise<Pago | null> {
   const [rows] = await pool.execute<PagoRow[]>(
-    'SELECT id_pago, id_propuesta, mes, notas FROM pagos WHERE id_pago = :id LIMIT 1',
+    "SELECT id_pago, id_propuesta, mes, notas, estado_pago, DATE_FORMAT(fecha_pago, '%Y-%m-%d') as fecha_pago, estado_boleta FROM pagos WHERE id_pago = :id LIMIT 1",
     { id },
   );
   const row = rows[0];
@@ -37,6 +40,9 @@ export async function findPagoById(id: number): Promise<Pago | null> {
     id_propuesta: row.id_propuesta,
     mes: row.mes,
     notas: row.notas,
+    estado_pago: row.estado_pago,
+    fecha_pago: row.fecha_pago,
+    estado_boleta: row.estado_boleta,
   };
 }
 
@@ -46,10 +52,13 @@ export async function createPago(input: CreatePagoInput): Promise<Pago> {
     id_propuesta: input.id_propuesta,
     mes: input.mes,
     notas: input.notas ?? null,
+    estado_pago: input.estado_pago ?? 'Pendiente',
+    fecha_pago: input.fecha_pago ?? null,
+    estado_boleta: input.estado_boleta ?? 'Faltante',
   };
 
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO pagos (id_propuesta, mes, notas) VALUES (:id_propuesta, :mes, :notas)',
+    'INSERT INTO pagos (id_propuesta, mes, notas, estado_pago, fecha_pago, estado_boleta) VALUES (:id_propuesta, :mes, :notas, :estado_pago, :fecha_pago, :estado_boleta)',
     dbInput,
   );
   return {
@@ -77,6 +86,18 @@ export async function updatePago(
   if (input.notas !== undefined) {
     updates.push('notas = :notas');
     params.notas = input.notas;
+  }
+  if (input.estado_pago !== undefined) {
+    updates.push('estado_pago = :estado_pago');
+    params.estado_pago = input.estado_pago;
+  }
+  if (input.fecha_pago !== undefined) {
+    updates.push('fecha_pago = :fecha_pago');
+    params.fecha_pago = input.fecha_pago;
+  }
+  if (input.estado_boleta !== undefined) {
+    updates.push('estado_boleta = :estado_boleta');
+    params.estado_boleta = input.estado_boleta;
   }
 
   if (updates.length === 0) {

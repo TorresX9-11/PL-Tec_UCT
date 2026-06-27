@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, Loader2, WifiOff } from 'lucide-react';
-import { mockSeccionesAsignaturas, getEstadoAsignatura, type SeccionAsignatura, type Carrera } from '../../data/mockData';
+import { getEstadoAsignatura, type SeccionAsignatura, type Carrera } from '../../data/mockData';
+import { listGrupos, createGrupo } from '../../data/grupos';
 import {
   listCursos,
   createCurso,
@@ -21,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Label } from '../../components/ui/label';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
+// imports limpios
 import { toast } from 'sonner';
 
 /** Traduce un error de API a un mensaje claro para el usuario. */
@@ -40,6 +41,7 @@ function errMsg(err: unknown): string {
 
 export function TablaAsignaturas() {
   const [asignaturas, setAsignaturas] = useState<CursoAsignatura[]>([]);
+  const [secciones, setSecciones] = useState<SeccionAsignatura[]>([]);
   const [carreras, setCarreras] = useState<Carrera[]>([]);
   const [source, setSource] = useState<DataSource>('backend');
   const [loading, setLoading] = useState(true);
@@ -52,10 +54,11 @@ export function TablaAsignaturas() {
   const load = async () => {
     setLoading(true);
     try {
-      const [cursosRes, carrerasRes] = await Promise.all([listCursos(), listCarreras()]);
+      const [cursosRes, carrerasRes, gruposRes] = await Promise.all([listCursos(), listCarreras(), listGrupos()]);
       setAsignaturas(cursosRes.data);
       setSource(cursosRes.source);
       setCarreras(carrerasRes.data);
+      setSecciones(gruposRes.data);
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -65,6 +68,9 @@ export function TablaAsignaturas() {
 
   useEffect(() => {
     void load();
+    const handler = () => load();
+    window.addEventListener('grupos:update', handler);
+    return () => window.removeEventListener('grupos:update', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -296,7 +302,7 @@ export function TablaAsignaturas() {
               </TableHeader>
               <TableBody>
                 {filteredAsignaturas.map((asignatura: CursoAsignatura) => {
-                  const seccionesAsig = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
+                  const seccionesAsig = secciones.filter(s => s.asignaturaId === asignatura.id);
                   const { total, tieneGrupos } = getEstadoAsignatura(seccionesAsig);
                   const addDeshabilitado = total >= 3 || tieneGrupos;
                   let tooltipAdd = 'Agregar sección';
@@ -317,21 +323,16 @@ export function TablaAsignaturas() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={addDeshabilitado}
-                                onClick={() => setAddingSeccionFor(asignatura)}
-                              >
-                                <Plus className="h-4 w-4 text-green-600" />
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{tooltipAdd}</TooltipContent>
-                        </Tooltip>
+                        <span title={tooltipAdd}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={addDeshabilitado}
+                            onClick={() => setAddingSeccionFor(asignatura)}
+                          >
+                            <Plus className={`h-4 w-4 ${addDeshabilitado ? 'text-gray-400' : 'text-green-600'}`} />
+                          </Button>
+                        </span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -374,25 +375,24 @@ export function TablaAsignaturas() {
           {addingSeccionFor && (
             <FormularioSeccion
               asignatura={addingSeccionFor}
+              seccionesActuales={secciones.filter(s => s.asignaturaId === addingSeccionFor.id)}
               onClose={() => setAddingSeccionFor(null)}
-              onSave={(seccionData) => {
-                // Crear nueva seccion en el mock
-                const newId = mockSeccionesAsignaturas.length > 0 
-                  ? Math.max(...mockSeccionesAsignaturas.map(s => s.id)) + 1 
-                  : 1;
-                
-                const nuevaSeccion: SeccionAsignatura = {
-                  id: newId,
-                  asignaturaId: addingSeccionFor.id,
-                  seccion: seccionData.seccion,
-                  horasP: seccionData.horasP,
-                  horasM: seccionData.horasM,
-                  horasA: seccionData.horasA
-                };
-                
-                mockSeccionesAsignaturas.push(nuevaSeccion);
-                setAddingSeccionFor(null);
-                toast.success('Sección creada exitosamente. Ahora está disponible en la Capa 2.');
+              onSave={async (seccionData) => {
+                try {
+                  await createGrupo({
+                    idCarrera: addingSeccionFor.idCarrera,
+                    idCurso: addingSeccionFor.idCurso,
+                    seccion: seccionData.seccion,
+                    horasP: seccionData.horasP,
+                    horasM: seccionData.horasM,
+                    horasA: seccionData.horasA
+                  });
+                  window.dispatchEvent(new Event('grupos:update'));
+                  setAddingSeccionFor(null);
+                  toast.success('Sección creada exitosamente. Ahora está disponible en la Capa 2.');
+                } catch (e) {
+                  toast.error('Error al crear sección');
+                }
               }}
             />
           )}
@@ -404,13 +404,13 @@ export function TablaAsignaturas() {
 
 interface FormularioSeccionProps {
   asignatura: CursoAsignatura;
+  seccionesActuales: SeccionAsignatura[];
   onClose: () => void;
   onSave: (data: { seccion: number, horasP: number, horasM: number, horasA: number }) => void;
 }
 
-function FormularioSeccion({ asignatura, onClose, onSave }: FormularioSeccionProps) {
+function FormularioSeccion({ asignatura, seccionesActuales, onClose, onSave }: FormularioSeccionProps) {
   // Pre-calcular el número sugerido (el siguiente disponible para esta asignatura)
-  const seccionesActuales = mockSeccionesAsignaturas.filter(s => s.asignaturaId === asignatura.id);
   const nextSeccionNum = seccionesActuales.length + 1;
 
   const [formData, setFormData] = useState({

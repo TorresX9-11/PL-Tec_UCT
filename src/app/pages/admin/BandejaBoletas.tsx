@@ -12,16 +12,13 @@ import {
   Inbox
 } from 'lucide-react';
 import {
-  getCuotasAdmin,
+  mockDocentesMaestros,
   type CuotaConContexto,
   type Boleta,
   type CuotaMensual
 } from '../../data/mockData';
-import {
-  setEstadoCuota,
-  setEstadoBoleta,
-  subscribePagosAdmin
-} from '../../data/pagosAdmin';
+import { listPagos, updatePago } from '../../data/pagos';
+import { listPropuestas } from '../../data/propuestas';
 import {
   loadMensajes,
   setMensajeCuota,
@@ -92,18 +89,37 @@ const ORDEN_PRIORIDAD: Record<string, number> = {
 // ============================================================================
 
 export function BandejaBoletas() {
-  // Refresh local: cada vez que cambia un override de pagos/boletas
-  // o un mensaje admin, incrementamos para re-renderizar.
   const [version, setVersion] = useState(0);
+  const [cuotasBackend, setCuotasBackend] = useState<CuotaMensual[]>([]);
+  const [propuestasBackend, setPropuestasBackend] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      const [pagosRes, propRes] = await Promise.all([
+        listPagos(),
+        listPropuestas()
+      ]);
+      setCuotasBackend(pagosRes.data);
+      setPropuestasBackend(propRes.data);
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al cargar pagos');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const off1 = subscribePagosAdmin(() => setVersion(v => v + 1));
+    fetchData();
     const handler = () => setVersion(v => v + 1);
     window.addEventListener('mensajes-admin:update', handler);
+    window.addEventListener('pagos:update', handler);
     return () => {
-      off1();
       window.removeEventListener('mensajes-admin:update', handler);
+      window.removeEventListener('pagos:update', handler);
     };
-  }, []);
+  }, [version]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoBoletaFiltro, setEstadoBoletaFiltro] = useState<string>('todos');
@@ -111,11 +127,49 @@ export function BandejaBoletas() {
   const [dialog, setDialog] = useState<DialogState>(null);
 
   // Carga TODAS las cuotas del semestre activo con contexto enriquecido.
-  // Depende de `version` para recalcular tras una mutación.
   const cuotas = useMemo<CuotaConContexto[]>(() => {
-    return getCuotasAdmin();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version]);
+    return cuotasBackend.map(pago => {
+      const propuesta = propuestasBackend.find(p => p.id === pago.propuestaId);
+      const docenteId = propuesta?.docenteId ?? 0;
+      const docente = mockDocentesMaestros.find(d => d.id === docenteId) ?? {
+        id: 0,
+        rut: '0-0',
+        dv: '0',
+        nombreCompleto: 'Desconocido',
+        correo: '',
+        contacto: ''
+      };
+
+      // Mock boleta data for now
+      const tieneBoleta = pago.boletaEstado !== 'Inexistente' && pago.boletaEstado !== 'Faltante';
+      const boleta: Boleta | undefined = tieneBoleta ? {
+        id: pago.id * 100,
+        docenteId: docenteId,
+        mes: pago.mes,
+        año: 2026,
+        estado: (pago.boletaEstado === 'Faltante' ? 'Subida' : pago.boletaEstado) as Boleta['estado'],
+        fecha: pago.fechaPago ?? new Date().toISOString().split('T')[0],
+        url: '',
+        nombre: `boleta_${pago.mes}.pdf`,
+        observaciones: pago.notas ?? undefined
+      } : undefined;
+
+      // Ensure that CuotaMensual has all necessary properties
+      const enrichedCuota: CuotaMensual = {
+        ...pago,
+        numeroCuota: 1, // Mock
+        montoBruto: propuesta ? Math.round(propuesta.montoTotalPropuesta / propuesta.numeroCuotas) : 0,
+        docenteId,
+        valorCuotaBruto: propuesta ? Math.round(propuesta.montoTotalPropuesta / propuesta.numeroCuotas) : 0,
+      };
+
+      return {
+        cuota: enrichedCuota,
+        docente,
+        boleta
+      };
+    });
+  }, [cuotasBackend, propuestasBackend]);
 
   // Filtros combinados (AND).
   const filtradas = useMemo(() => {
@@ -426,16 +480,21 @@ function FilaCuota({
   const [confirmPagoOpen, setConfirmPagoOpen] = useState(false);
   const pagada = cuota.estadoPago === 'Pagada';
 
-  const confirmarPago = () => {
-    if (pagada) {
-      setEstadoCuota(cuota.id, { pagada: false });
-      toast.success('Pago revertido a Pendiente.');
-    } else {
-      setEstadoCuota(cuota.id, {
-        pagada: true,
-        fechaPago: new Date().toISOString().split('T')[0]
-      });
-      toast.success(`Pago registrado: ${cuota.mes} · ${docente.nombreCompleto}`);
+  const confirmarPago = async () => {
+    try {
+      if (pagada) {
+        await updatePago(cuota.id, { estadoPago: 'Pendiente', fechaPago: null });
+        toast.success('Pago revertido a Pendiente.');
+      } else {
+        await updatePago(cuota.id, {
+          estadoPago: 'Pagada',
+          fechaPago: new Date().toISOString().split('T')[0]
+        });
+        toast.success(`Pago registrado: ${cuota.mes} · ${docente.nombreCompleto}`);
+      }
+      window.dispatchEvent(new Event('pagos:update'));
+    } catch (e) {
+      toast.error('Error al actualizar el pago');
     }
     setConfirmPagoOpen(false);
   };
@@ -635,17 +694,22 @@ function DialogRevisarBoleta({
 
   if (!ctx?.boleta) return null;
 
-  const guardar = () => {
+  const guardar = async () => {
     if (estado === 'Con Observación' && !observ.trim()) {
       toast.error('Debe ingresar la observación para el docente.');
       return;
     }
-    setEstadoBoleta(ctx.boleta!.id, {
-      estado,
-      observaciones: estado === 'Con Observación' ? observ.trim() : undefined
-    });
-    toast.success(`Boleta marcada como "${estado}"`);
-    onClose();
+    try {
+      await updatePago(ctx.cuota.id, {
+        boletaEstado: estado,
+        notas: estado === 'Con Observación' ? observ.trim() : undefined
+      });
+      toast.success(`Boleta marcada como "${estado}"`);
+      window.dispatchEvent(new Event('pagos:update'));
+      onClose();
+    } catch(e) {
+      toast.error('Error al actualizar la boleta');
+    }
   };
 
   return (

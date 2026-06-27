@@ -1,6 +1,10 @@
 import { useState, useEffect, Fragment } from 'react';
 import { Search, ChevronDown, ChevronRight, UserPlus, Edit, Check, ChevronsUpDown, Split, Trash2, Download, FileText } from 'lucide-react';
-import { mockAsignaturas, mockCarreras, mockSeccionesAsignaturas, mockDocentesMaestros, getEstadoAsignatura, type SeccionAsignatura } from '../../data/mockData';
+import { getEstadoAsignatura, type SeccionAsignatura } from '../../data/mockData';
+import { listGrupos, createGrupo, updateGrupo, deleteGrupo } from '../../data/grupos';
+import { listCursos, type CursoAsignatura } from '../../data/cursos';
+import { listCarreras, type Carrera } from '../../data/carreras';
+import { listDocentes, type DocenteMaestro } from '../../data/docentes';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -20,45 +24,72 @@ import {
 import { Label } from '../../components/ui/label';
 import { cn } from '../../components/ui/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
-import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+function formatNombreSeccion(sec: { seccion: number; subGrupo?: string | null }) {
+  if (sec.subGrupo) {
+    const numGrupo = sec.subGrupo === 'A' ? 1 : 2;
+    return `Grupo ${numGrupo} - S${sec.seccion}`;
+  }
+  return `Sección ${sec.seccion}`;
+}
+
 export function TablaDesignacionPMA() {
-  const [secciones, setSecciones] = useState<SeccionAsignatura[]>(mockSeccionesAsignaturas);
+  const [secciones, setSecciones] = useState<SeccionAsignatura[]>([]);
+  const [asignaturas, setAsignaturas] = useState<CursoAsignatura[]>([]);
+  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [docentes, setDocentes] = useState<DocenteMaestro[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [carreraFilter, setCarreraFilter] = useState<string>('todas');
   const [expandedAsignaturas, setExpandedAsignaturas] = useState<Set<number>>(new Set());
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSeccion, setEditingSeccion] = useState<SeccionAsignatura | null>(null);
   const [tabSemestre, setTabSemestre] = useState<'1-3-5' | '2-4-5'>('1-3-5');
-  const [openReporte, setOpenReporte] = useState(false);
 
-  // Actualizar cuando cambia la vista o el mock global
+  const fetchData = async () => {
+    try {
+      const [resGrupos, resCursos, resCarreras, resDocentes] = await Promise.all([
+        listGrupos(),
+        listCursos(),
+        listCarreras(),
+        listDocentes()
+      ]);
+      setSecciones(resGrupos.data);
+      setAsignaturas(resCursos.data);
+      setCarreras(resCarreras.data);
+      setDocentes(resDocentes.data);
+    } catch (e) {
+      toast.error('Error al cargar datos de designación');
+    }
+  };
+
   useEffect(() => {
-    setSecciones([...mockSeccionesAsignaturas]);
+    fetchData();
+    const handler = () => fetchData();
+    window.addEventListener('grupos:update', handler);
+    return () => window.removeEventListener('grupos:update', handler);
   }, []);
 
-  // Semestres 1-3-5 y 2-4-5 (el 5 — vespertino compartido — aparece en ambos grupos)
   const semestresTab = tabSemestre === '1-3-5' ? [1, 3, 5] : [2, 4, 5];
 
-  const filteredAsignaturas = mockAsignaturas.filter((asig) => {
+  const filteredAsignaturas = asignaturas.filter((asig) => {
     const matchesSearch =
       asig.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asig.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asig.sigla.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCarrera = carreraFilter === 'todas' || asig.carreraId === Number(carreraFilter);
+    const matchesCarrera = carreraFilter === 'todas' || asig.idCarrera === carreraFilter;
     return matchesSearch && matchesCarrera && semestresTab.includes(asig.semestre);
   });
 
-  const getCarrera = (carreraId: number) => {
-    return mockCarreras.find(c => c.id === carreraId);
+  const getCarrera = (carreraIdStr: string) => {
+    return carreras.find(c => c.codigo === carreraIdStr);
   };
 
   const getDocente = (docenteId?: number) => {
     if (!docenteId) return null;
-    return mockDocentesMaestros.find(d => d.id === docenteId);
+    return docentes.find(d => d.id === docenteId);
   };
 
   const getSeccionesForAsignatura = (asignaturaId: number) => {
@@ -82,9 +113,6 @@ export function TablaDesignacionPMA() {
     setOpenDialog(true);
   };
 
-  // Para asignaturas que aún no tienen ninguna sección registrada:
-  // creamos una sección "borrador" en memoria (id = -1) y la pasamos al dialog.
-  // Si el admin guarda, `handleUpdateSeccion` detecta el id negativo y la inserta como nueva.
   const handleCrearPrimeraSeccion = (asignaturaId: number) => {
     setEditingSeccion({
       id: -1,
@@ -98,75 +126,104 @@ export function TablaDesignacionPMA() {
     setOpenDialog(true);
   };
 
-  const handleUpdateSeccion = (updatedSeccion: SeccionAsignatura) => {
-    if (updatedSeccion.id < 0) {
-      // Nueva sección: asignar id real y agregar al listado
-      const nuevoId = mockSeccionesAsignaturas.length > 0 ? Math.max(...mockSeccionesAsignaturas.map(s => s.id)) + 1 : 1;
-      const nueva = { ...updatedSeccion, id: nuevoId };
-      mockSeccionesAsignaturas.push(nueva);
-      setSecciones([...mockSeccionesAsignaturas]);
-      toast.success('Sección creada y docente asignado');
-    } else {
-      const index = mockSeccionesAsignaturas.findIndex(s => s.id === updatedSeccion.id);
-      if (index >= 0) {
-        mockSeccionesAsignaturas[index] = updatedSeccion;
+  const handleUpdateSeccion = async (updatedSeccion: SeccionAsignatura) => {
+    try {
+      const asig = asignaturas.find(a => a.id === updatedSeccion.asignaturaId);
+      if (!asig) throw new Error("Asignatura no encontrada");
+      const idCarrera = asig.idCarrera;
+
+      if (updatedSeccion.id < 0) {
+        await createGrupo({
+          idCarrera,
+          idCurso: asig.idCurso,
+          seccion: updatedSeccion.seccion,
+          subGrupo: updatedSeccion.subGrupo,
+          docenteId: updatedSeccion.docenteId,
+          horasP: updatedSeccion.horasP,
+          horasM: updatedSeccion.horasM,
+          horasA: updatedSeccion.horasA
+        });
+        toast.success('Sección creada y docente asignado');
+      } else {
+        await updateGrupo(updatedSeccion.id, {
+          subGrupo: updatedSeccion.subGrupo,
+          docenteId: updatedSeccion.docenteId,
+          horasP: updatedSeccion.horasP,
+          horasM: updatedSeccion.horasM,
+          horasA: updatedSeccion.horasA
+        });
+        toast.success('Asignación actualizada exitosamente');
       }
-      setSecciones([...mockSeccionesAsignaturas]);
-      toast.success('Asignación actualizada exitosamente');
+      window.dispatchEvent(new Event('grupos:update'));
+    } catch(e) {
+      toast.error('Error al guardar sección');
     }
     setEditingSeccion(null);
     setOpenDialog(false);
   };
 
-  // Una sección solo puede dividirse en exactamente 2 grupos (A y B).
-  const handleSplitSeccion = (seccion: SeccionAsignatura) => {
-    const index = mockSeccionesAsignaturas.findIndex(s => s.id === seccion.id);
-    if (index === -1) return;
+  const handleSplitSeccion = async (seccion: SeccionAsignatura) => {
+    try {
+      const asig = asignaturas.find(a => a.id === seccion.asignaturaId);
+      if (!asig) throw new Error("Asignatura no encontrada");
+      const idCarrera = asig.idCarrera;
 
-    // Modificar la original → Grupo A
-    mockSeccionesAsignaturas[index] = { ...seccion, subGrupo: 'A' };
+      await updateGrupo(seccion.id, {
+        subGrupo: 'A',
+        docenteId: seccion.docenteId,
+        horasP: seccion.horasP,
+        horasM: seccion.horasM,
+        horasA: seccion.horasA
+      });
 
-    // Crear Grupo B (nace sin docente y sin horas)
-    const maxId = Math.max(...mockSeccionesAsignaturas.map(s => s.id));
-    mockSeccionesAsignaturas.push({
-      ...seccion,
-      id: maxId + 1,
-      subGrupo: 'B',
-      docenteId: undefined,
-      horasP: 0,
-      horasM: 0,
-      horasA: 0,
-    });
+      await createGrupo({
+        idCarrera,
+        idCurso: asig.idCurso,
+        seccion: seccion.seccion,
+        subGrupo: 'B',
+        docenteId: null,
+        horasP: 0,
+        horasM: 0,
+        horasA: 0
+      });
 
-    setSecciones([...mockSeccionesAsignaturas]);
-    toast.success('Sección dividida en Grupo A y Grupo B');
-  };
-
-  const handleDeleteSeccion = (id: number) => {
-    if (confirm('¿Está seguro de eliminar esta sección/grupo?')) {
-      const index = mockSeccionesAsignaturas.findIndex(s => s.id === id);
-      if (index === -1) return;
-      
-      const seccionEliminada = mockSeccionesAsignaturas[index];
-      mockSeccionesAsignaturas.splice(index, 1);
-
-      // Si era un subgrupo, verificamos si quedó solo el 'A' para limpiarlo
-      if (seccionEliminada.subGrupo) {
-        const remaining = mockSeccionesAsignaturas.filter(
-          s => s.asignaturaId === seccionEliminada.asignaturaId && s.seccion === seccionEliminada.seccion
-        );
-        if (remaining.length === 1 && remaining[0].subGrupo === 'A') {
-          remaining[0].subGrupo = undefined;
-        }
-      }
-
-      setSecciones([...mockSeccionesAsignaturas]);
-      toast.success('Sección eliminada exitosamente');
+      window.dispatchEvent(new Event('grupos:update'));
+      toast.success('Sección dividida en Grupo A y Grupo B');
+    } catch(e) {
+      toast.error('Error al dividir sección');
     }
   };
 
-  // Exportación PDF (refleja los filtros activos: búsqueda + carrera).
-  // Se aplana la estructura: una fila por sección. Estilo corporativo igual a Reportes.tsx.
+  const handleDeleteSeccion = async (id: number) => {
+    if (confirm('¿Está seguro de eliminar esta sección/grupo?')) {
+      try {
+        const seccionEliminada = secciones.find(s => s.id === id);
+        if (!seccionEliminada) return;
+
+        await deleteGrupo(id);
+
+        if (seccionEliminada.subGrupo) {
+          const remaining = secciones.filter(
+            s => s.asignaturaId === seccionEliminada.asignaturaId && s.seccion === seccionEliminada.seccion && s.id !== id
+          );
+          if (remaining.length === 1 && remaining[0].subGrupo === 'A') {
+            await updateGrupo(remaining[0].id, {
+              subGrupo: null,
+              docenteId: remaining[0].docenteId,
+              horasP: remaining[0].horasP,
+              horasM: remaining[0].horasM,
+              horasA: remaining[0].horasA
+            });
+          }
+        }
+        window.dispatchEvent(new Event('grupos:update'));
+        toast.success('Sección eliminada exitosamente');
+      } catch(e) {
+        toast.error('Error al eliminar sección');
+      }
+    }
+  };
+
   const handleExportPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape' });
 
@@ -178,7 +235,7 @@ export function TablaDesignacionPMA() {
 
     const rows: (string | number)[][] = [];
     filteredAsignaturas.forEach((asig) => {
-      const carrera = getCarrera(asig.carreraId);
+      const carrera = getCarrera(asig.idCarrera);
       const seccionesAsig = getSeccionesForAsignatura(asig.id);
       if (seccionesAsig.length === 0) {
         rows.push([
@@ -199,7 +256,7 @@ export function TablaDesignacionPMA() {
             carrera?.nombre ?? '—',
             carrera?.jornada ?? '—',
             asig.sigla,
-            `Sección ${sec.seccion}${sec.subGrupo ? `-${sec.subGrupo}` : ''}`,
+            formatNombreSeccion(sec),
             d?.nombreCompleto ?? 'Sin asignar',
             d ? `${d.rut}-${d.dv}` : '—',
             d?.nivelDocente ?? '—',
@@ -223,86 +280,12 @@ export function TablaDesignacionPMA() {
     toast.success('PDF generado exitosamente');
   };
 
-  // Resumen por carrera (refleja el filtro de carrera activo; agrega todas las
-  // secciones de cada carrera independientemente del semestre/pestaña).
-  const filasResumen = mockCarreras
-    .filter((c) => carreraFilter === 'todas' || c.id === Number(carreraFilter))
-    .map((c) => {
-      const asigs = mockAsignaturas.filter((a) => a.carreraId === c.id);
-      const asigIds = new Set(asigs.map((a) => a.id));
-      const secs = mockSeccionesAsignaturas.filter((s) => asigIds.has(s.asignaturaId));
-      const asignadas = secs.filter((s) => s.docenteId).length;
-      const sinDocente = secs.length - asignadas;
-      const cobertura = secs.length > 0 ? Math.round((asignadas / secs.length) * 100) : 0;
-      return {
-        carrera: c.nombre,
-        totalAsignaturas: asigs.length,
-        totalSecciones: secs.length,
-        asignadas,
-        sinDocente,
-        cobertura,
-      };
-    })
-    .filter((f) => f.totalAsignaturas > 0);
-
-  const totalesResumen = filasResumen.reduce(
-    (acc, f) => ({
-      totalAsignaturas: acc.totalAsignaturas + f.totalAsignaturas,
-      totalSecciones: acc.totalSecciones + f.totalSecciones,
-      asignadas: acc.asignadas + f.asignadas,
-      sinDocente: acc.sinDocente + f.sinDocente,
-    }),
-    { totalAsignaturas: 0, totalSecciones: 0, asignadas: 0, sinDocente: 0 }
-  );
-  const coberturaTotal =
-    totalesResumen.totalSecciones > 0
-      ? Math.round((totalesResumen.asignadas / totalesResumen.totalSecciones) * 100)
-      : 0;
-
-  const handleExportResumen = () => {
-    const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(18);
-    doc.text('Resumen por Carrera - Designación PMA', 14, 20);
-    doc.setFontSize(11);
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
-
-    const rows: (string | number)[][] = filasResumen.map((f) => [
-      f.carrera,
-      f.totalAsignaturas,
-      f.asignadas,
-      f.sinDocente,
-      `${f.cobertura}%`,
-    ]);
-    rows.push([
-      'TOTAL',
-      totalesResumen.totalAsignaturas,
-      totalesResumen.asignadas,
-      totalesResumen.sinDocente,
-      `${coberturaTotal}%`,
-    ]);
-
-    autoTable(doc, {
-      head: [['Carrera', 'Total Asignaturas', 'Secciones Asignadas', 'Secciones Sin Docente', '% Cobertura']],
-      body: rows,
-      startY: 34,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [37, 99, 235] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-      margin: { top: 34 },
-    });
-
-    doc.save(`resumen-pma-${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success('Resumen exportado exitosamente');
-  };
-
-  // Count stats
   const totalSecciones = secciones.length;
   const seccionesAsignadas = secciones.filter((s: SeccionAsignatura) => s.docenteId).length;
   const seccionesSinAsignar = totalSecciones - seccionesAsignadas;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Designación y PMA</h2>
@@ -312,7 +295,6 @@ export function TablaDesignacionPMA() {
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
@@ -340,7 +322,6 @@ export function TablaDesignacionPMA() {
         </Card>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4">
@@ -361,8 +342,8 @@ export function TablaDesignacionPMA() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas las carreras</SelectItem>
-                {mockCarreras.map((carrera) => (
-                  <SelectItem key={carrera.id} value={carrera.id.toString()}>
+                {carreras.map((carrera) => (
+                  <SelectItem key={carrera.codigo} value={carrera.codigo.toString()}>
                     {carrera.nombre}
                   </SelectItem>
                 ))}
@@ -372,7 +353,6 @@ export function TablaDesignacionPMA() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
@@ -411,16 +391,14 @@ export function TablaDesignacionPMA() {
               </TableHeader>
               <TableBody>
                 {filteredAsignaturas.map((asignatura) => {
-                  const carrera = getCarrera(asignatura.carreraId);
+                  const carrera = getCarrera(asignatura.idCarrera);
                   const seccionesAsig = getSeccionesForAsignatura(asignatura.id);
                   const isExpanded = expandedAsignaturas.has(asignatura.id);
                   const hasMultipleSecciones = seccionesAsig.length > 1;
 
-                  // Show first section in main row
                   const primeraSeccion = seccionesAsig[0];
                   const docente = primeraSeccion ? getDocente(primeraSeccion.docenteId) : null;
 
-                  // Estado de líneas de ingreso (regla: máx 3, split solo si hay 1 sección)
                   const { total, tieneGrupos, seccionesSinGrupo } = getEstadoAsignatura(seccionesAsig);
                   const splitDeshabilitado =
                     tieneGrupos || seccionesSinGrupo.length > 1 || total === 0;
@@ -460,11 +438,11 @@ export function TablaDesignacionPMA() {
                           {asignatura.semestre}° Sem {asignatura.año}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{asignatura.lineasIngreso}</Badge>
+                          <Badge variant="outline">{seccionesAsig.length || 1}</Badge>
                         </TableCell>
                         <TableCell className="font-mono text-sm">{asignatura.sigla}</TableCell>
                         <TableCell>
-                          {primeraSeccion ? `Sección ${primeraSeccion.seccion}${primeraSeccion.subGrupo ? `-${primeraSeccion.subGrupo}` : ''}` : '-'}
+                          {primeraSeccion ? formatNombreSeccion(primeraSeccion) : '-'}
                         </TableCell>
                         <TableCell>
                           {primeraSeccion ? (
@@ -542,11 +520,10 @@ export function TablaDesignacionPMA() {
                         </TableCell>
                       </TableRow>
 
-                      {/* Additional sections (expanded) */}
                       {isExpanded && hasMultipleSecciones && seccionesAsig.slice(1).map((seccion: SeccionAsignatura) => {
                         const docenteSeccion = getDocente(seccion.docenteId);
                         return (
-                          <TableRow key={seccion.id} className="bg-gray-50">
+                          <TableRow key={seccion.id} className="bg-gray-50/50">
                             <TableCell></TableCell>
                             <TableCell className="text-gray-500">↳ {asignatura.nombre}</TableCell>
                             <TableCell></TableCell>
@@ -554,7 +531,7 @@ export function TablaDesignacionPMA() {
                             <TableCell></TableCell>
                             <TableCell></TableCell>
                             <TableCell></TableCell>
-                            <TableCell>Sección {seccion.seccion}{seccion.subGrupo ? `-${seccion.subGrupo}` : ''}</TableCell>
+                            <TableCell>{formatNombreSeccion(seccion)}</TableCell>
                             <TableCell>
                               {docenteSeccion ? (
                                 <span className="font-medium">{docenteSeccion.nombreCompleto}</span>
@@ -628,18 +605,17 @@ export function TablaDesignacionPMA() {
         </CardContent>
       </Card>
 
-      {/* Asignar Docente Dialog */}
       <Dialog open={openDialog} onOpenChange={(open: boolean) => {
         setOpenDialog(open);
         if (!open) setEditingSeccion(null);
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Asignar Docente</DialogTitle>
+            <DialogTitle>Asignar PMA</DialogTitle>
             <DialogDescription>
               {editingSeccion && (
                 <>
-                  {mockAsignaturas.find(a => a.id === editingSeccion.asignaturaId)?.nombre} - Sección {editingSeccion.seccion}{editingSeccion.subGrupo ? `-${editingSeccion.subGrupo}` : ''}
+                  {asignaturas.find(a => a.id === editingSeccion.asignaturaId)?.nombre} - {formatNombreSeccion(editingSeccion)}
                 </>
               )}
             </DialogDescription>
@@ -647,6 +623,7 @@ export function TablaDesignacionPMA() {
           {editingSeccion && (
             <FormularioAsignacion
               seccion={editingSeccion}
+              docentes={docentes}
               onClose={() => {
                 setOpenDialog(false);
                 setEditingSeccion(null);
@@ -662,11 +639,12 @@ export function TablaDesignacionPMA() {
 
 interface FormularioAsignacionProps {
   seccion: SeccionAsignatura;
+  docentes: DocenteMaestro[];
   onClose: () => void;
   onSave: (seccion: SeccionAsignatura) => void;
 }
 
-function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacionProps) {
+function FormularioAsignacion({ seccion, docentes, onClose, onSave }: FormularioAsignacionProps) {
   const [formData, setFormData] = useState<SeccionAsignatura>({
     ...seccion
   });
@@ -683,7 +661,7 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
   };
 
   const [comboOpen, setComboOpen] = useState(false);
-  const docenteSeleccionado = mockDocentesMaestros.find(d => d.id === formData.docenteId);
+  const docenteSeleccionado = docentes.find(d => d.id === formData.docenteId);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -733,7 +711,7 @@ function FormularioAsignacion({ seccion, onClose, onSave }: FormularioAsignacion
                     />
                     Sin asignar
                   </CommandItem>
-                  {mockDocentesMaestros.map((docente) => {
+                  {docentes.map((docente) => {
                     const label = `${docente.nombreCompleto} ${docente.rut}-${docente.dv}${docente.nivelDocente ? ` Nivel ${docente.nivelDocente}` : ''}`;
                     return (
                       <CommandItem

@@ -17,6 +17,12 @@ const poolOptions: PoolOptions = {
   // Evita parseo automático de DECIMAL/BIGINT a Number (puede perder precisión).
   decimalNumbers: false,
   dateStrings: false,
+  charset: 'utf8mb4',
+  multipleStatements: false,
+  // Configuración para evitar AUTH_SWITCH_PLUGIN_ERROR
+  connectTimeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
 };
 
 export const pool: Pool = mysql.createPool(poolOptions);

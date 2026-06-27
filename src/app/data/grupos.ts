@@ -32,6 +32,8 @@ export interface BackendGrupo {
   id_carrera: string;
   id_curso: string;
   seccion: '1' | '2' | '3';
+  subgrupo: 'A' | 'B' | null;
+  rut_docente: number | null;
   horas_presencial: number | null;
   horas_mixto: number | null;
   horas_administrativo: number | null;
@@ -47,6 +49,8 @@ export interface GrupoInput {
   idCarrera: string;
   idCurso: string;
   seccion: number; // 1 | 2 | 3
+  subGrupo?: 'A' | 'B' | null;
+  docenteId?: number | null;
   horasP: number;
   horasM: number;
   horasA: number;
@@ -59,6 +63,8 @@ function toFrontend(g: BackendGrupo): SeccionAsignatura {
     id: g.id_grupo,
     asignaturaId: syntheticCursoId(g.id_carrera, g.id_curso),
     seccion: Number(g.seccion),
+    subGrupo: g.subgrupo,
+    docenteId: g.rut_docente,
     horasP: g.horas_presencial ?? 0,
     horasM: g.horas_mixto ?? 0,
     horasA: g.horas_administrativo ?? 0,
@@ -94,6 +100,8 @@ export async function createGrupo(input: GrupoInput): Promise<void> {
     id_carrera: input.idCarrera,
     id_curso: input.idCurso,
     seccion: seccionToBackend(input.seccion),
+    subgrupo: input.subGrupo ?? null,
+    rut_docente: input.docenteId ?? null,
     horas_presencial: input.horasP,
     horas_mixto: input.horasM,
     horas_administrativo: input.horasA,
@@ -103,9 +111,11 @@ export async function createGrupo(input: GrupoInput): Promise<void> {
 /** Actualiza una sección (grupo) por su id (requiere JWT admin/coordinador). */
 export async function updateGrupo(
   idGrupo: number,
-  input: Pick<GrupoInput, 'horasP' | 'horasM' | 'horasA'>,
+  input: Pick<GrupoInput, 'horasP' | 'horasM' | 'horasA' | 'subGrupo' | 'docenteId'>,
 ): Promise<void> {
   await api.put(`/grupos/${idGrupo}`, {
+    subgrupo: input.subGrupo ?? null,
+    rut_docente: input.docenteId ?? null,
     horas_presencial: input.horasP,
     horas_mixto: input.horasM,
     horas_administrativo: input.horasA,
