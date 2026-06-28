@@ -18,6 +18,7 @@ import {
   type Nivel,
   type DataSource,
 } from '../../data/usuarios';
+import { getCurrentUser } from '../../data/auth';
 import { ApiError } from '../../data/apiClient';
 
 const NIVELES: Nivel[] = ['docente', 'coordinador', 'academico', 'supervisor', 'admin'];
@@ -52,6 +53,11 @@ export function Usuarios() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
 
+  const currentUser = getCurrentUser();
+  const allowedNiveles = currentUser?.nivel === 'supervisor' 
+    ? NIVELES 
+    : NIVELES.filter(n => n === 'docente' || n === 'admin');
+
   const load = async () => {
     setLoading(true);
     try {
@@ -71,6 +77,9 @@ export function Usuarios() {
   }, []);
 
   const filtered = usuarios.filter((u) => {
+    // Si no está en los niveles permitidos (por ejemplo, es admin y u.nivel es supervisor), lo ocultamos
+    if (!allowedNiveles.includes(u.nivel)) return false;
+
     const q = searchTerm.toLowerCase();
     const matchesSearch =
       u.correo_usuario.toLowerCase().includes(q) || u.nombre.toLowerCase().includes(q);
@@ -158,7 +167,7 @@ export function Usuarios() {
 
       {/* Summary */}
       <div className="grid gap-4 md:grid-cols-5">
-        {NIVELES.map((n) => (
+        {allowedNiveles.map((n) => (
           <Card key={n}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium capitalize text-gray-600">{n}</CardTitle>
@@ -188,7 +197,7 @@ export function Usuarios() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos los niveles</SelectItem>
-              {NIVELES.map((n) => (
+              {allowedNiveles.map((n) => (
                 <SelectItem key={n} value={n} className="capitalize">
                   {n}
                 </SelectItem>
@@ -287,6 +296,7 @@ export function Usuarios() {
           </DialogHeader>
           <FormularioUsuario
             usuario={editing}
+            allowedNiveles={allowedNiveles}
             onClose={() => {
               setOpenDialog(false);
               setEditing(null);
@@ -301,11 +311,12 @@ export function Usuarios() {
 
 interface FormularioUsuarioProps {
   usuario: Usuario | null;
+  allowedNiveles: Nivel[];
   onClose: () => void;
   onSave: (data: { correo_usuario: string; nombre: string; nivel: Nivel; contrasena: string }) => void;
 }
 
-function FormularioUsuario({ usuario, onClose, onSave }: FormularioUsuarioProps) {
+function FormularioUsuario({ usuario, allowedNiveles, onClose, onSave }: FormularioUsuarioProps) {
   const isEdit = usuario !== null;
   const [correo, setCorreo] = useState(usuario?.correo_usuario ?? '');
   const [nombre, setNombre] = useState(usuario?.nombre ?? '');
@@ -374,7 +385,7 @@ function FormularioUsuario({ usuario, onClose, onSave }: FormularioUsuarioProps)
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {NIVELES.map((n) => (
+            {allowedNiveles.map((n) => (
               <SelectItem key={n} value={n} className="capitalize">
                 {n}
               </SelectItem>

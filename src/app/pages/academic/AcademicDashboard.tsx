@@ -1,22 +1,54 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { FileText, Users, Award, TrendingUp, CheckCircle, AlertCircle, GraduationCap } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { mockDocentesAcademicos, getNombreCarrera } from '../../data/mockData';
+import { getNombreCarrera } from '../../data/mockData';
+import { getDashboardStats, getDocentesPorCarrera, getGruposPorCarrera, type DashboardStats, type DocenteAcademico, type GrupoAcademico } from '../../data/academico';
+import { toast } from 'sonner';
 
 export function AcademicDashboard() {
-  const totalDocentes = mockDocentesAcademicos.length;
-  const cvCompleto = mockDocentesAcademicos.filter(d => d.cvActualizado === 'Validado').length;
-  const documentacionCompleta = mockDocentesAcademicos.filter(
-    d => d.certificadoTitulo === 'Validado' && d.certificadoAntecedentes === 'Validado' && d.certificadoInhabilidad === 'Validado'
-  ).length;
-  const contenidoAlDia = mockDocentesAcademicos.filter(d => d.contenidoSubido).length;
-  const notasAlDia = mockDocentesAcademicos.filter(d => d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales).length;
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
+  const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Datos del coordinador logueado
   const userName = sessionStorage.getItem('userName') || 'Coordinador/a';
-  const carreraId = sessionStorage.getItem('coordinadorCarreraId');
+  const carreraId = sessionStorage.getItem('coordinadorCarreraId') || '';
   const carreraNombre = getNombreCarrera(carreraId);
   const isSupervising = !!sessionStorage.getItem('modoSupervision');
+
+  useEffect(() => {
+    async function loadStats() {
+      if (!carreraId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const [data, docs, grps] = await Promise.all([
+          getDashboardStats(carreraId),
+          getDocentesPorCarrera(carreraId),
+          getGruposPorCarrera(carreraId)
+        ]);
+        setStats(data);
+        setDocentes(docs);
+        setGrupos(grps);
+      } catch (err) {
+        toast.error('No se pudieron cargar las estadísticas.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, [carreraId]);
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Cargando dashboard...</div>;
+
+  const totalDocentes = stats?.totalDocentes ?? 0;
+  const cvCompleto = stats?.cvCompleto ?? 0;
+  const documentacionCompleta = stats?.documentacionCompleta ?? 0;
+  const contenidoAlDia = stats?.contenidoAlDia ?? 0;
+  const notasAlDia = stats?.notasAlDia ?? 0;
 
   return (
     <div className="space-y-6">
@@ -198,86 +230,50 @@ export function AcademicDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {mockDocentesAcademicos
-              .filter(d => d.cvActualizado !== 'Validado' || d.certificadoAntecedentes !== 'Validado' || !d.contenidoSubido || d.notasIngresadas < d.notasTotales)
-              .map((docente) => (
-                <div
-                  key={docente.id}
-                  className="flex items-start gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4"
-                >
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
-                  <div className="flex-1">
-                    <h4 className="font-medium">{docente.nombreCompleto}</h4>
-                    <ul className="mt-1 space-y-1 text-sm text-gray-700">
-                      {docente.cvActualizado !== 'Validado' && <li>• Actualizar CV</li>}
-                      {docente.certificadoAntecedentes !== 'Validado' && <li>• Subir certificado de antecedentes</li>}
-                      {!docente.contenidoSubido && <li>• Subir contenido a plataformas</li>}
-                      {docente.notasIngresadas < docente.notasTotales && (
-                        <li>• Actualizar registro de notas ({docente.notasIngresadas}/{docente.notasTotales})</li>
-                      )}
-                    </ul>
+            {docentes
+              .filter(d => d.estado_cv !== 'Validado' || d.estado_antecedentes !== 'Validado')
+              .slice(0, 5) // Mostramos solo los primeros 5 para el dashboard
+              .map((docente) => {
+                const ramos = grupos.filter(g => g.rut_docente === docente.rut_docente);
+                const faltanNotas = ramos.some(r => r.notas_estado !== 'Validado');
+                const faltaContenido = ramos.some(r => r.contenido_blackboard !== 'Validado');
+                
+                if (docente.estado_cv === 'Validado' && docente.estado_antecedentes === 'Validado' && !faltanNotas && !faltaContenido) {
+                  return null;
+                }
+                
+                return (
+                  <div
+                    key={docente.rut_docente}
+                    className="flex items-start gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4"
+                  >
+                    <AlertCircle className="h-5 w-5 text-yellow-600" />
+                    <div className="flex-1">
+                      <h4 className="font-medium">{docente.nombre}</h4>
+                      <ul className="mt-1 space-y-1 text-sm text-gray-700">
+                        {docente.estado_cv !== 'Validado' && <li>• Actualizar CV</li>}
+                        {docente.estado_antecedentes !== 'Validado' && <li>• Subir certificado de antecedentes</li>}
+                        {faltaContenido && <li>• Subir contenido a plataformas</li>}
+                        {faltanNotas && <li>• Actualizar registro de notas</li>}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
-            {mockDocentesAcademicos.filter(
-              d => d.cvActualizado === 'Validado' && d.certificadoAntecedentes === 'Validado' && d.contenidoSubido && d.notasTotales > 0 && d.notasIngresadas >= d.notasTotales
-            ).length === totalDocentes && (
+            {docentes.every(
+              d => d.estado_cv === 'Validado' && d.estado_antecedentes === 'Validado' && 
+              grupos.filter(g => g.rut_docente === d.rut_docente).every(r => r.contenido_blackboard === 'Validado' && r.notas_estado === 'Validado')
+            ) && docentes.length > 0 && (
               <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
                 <CheckCircle className="h-5 w-5" />
                 <span className="font-medium">Todos los docentes están al día</span>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Estadísticas de Capacitaciones */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Capacitaciones y Desarrollo Docente</CardTitle>
-          <CardDescription>Resumen de capacitaciones registradas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <Award className="h-8 w-8 text-blue-600" />
-                <div>
-                  <div className="text-2xl font-bold">
-                    {mockDocentesAcademicos.reduce((sum, d) => sum + d.capacitaciones, 0)}
-                  </div>
-                  <p className="text-sm text-gray-600">Total Capacitaciones</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <Users className="h-8 w-8 text-green-600" />
-                <div>
-                  <div className="text-2xl font-bold">
-                    {(
-                      mockDocentesAcademicos.reduce((sum, d) => sum + d.capacitaciones, 0) /
-                      totalDocentes
-                    ).toFixed(1)}
-                  </div>
-                  <p className="text-sm text-gray-600">Promedio por Docente</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-8 w-8 text-purple-600" />
-                <div>
-                  <div className="text-2xl font-bold">
-                    {Math.max(...mockDocentesAcademicos.map(d => d.capacitaciones))}
-                  </div>
-                  <p className="text-sm text-gray-600">Máximo por Docente</p>
-                </div>
-              </div>
-            </div>
+            
+            {docentes.length === 0 && (
+              <div className="text-gray-500 text-sm">No hay docentes registrados en esta carrera.</div>
+            )}
           </div>
         </CardContent>
       </Card>

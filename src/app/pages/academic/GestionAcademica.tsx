@@ -1,15 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { CheckCircle, AlertCircle, BookOpen, User, FileCheck, ArrowRight, Search, FilterX } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import {
-  mockDocentesAcademicos,
-  mockSeccionesAsignaturas,
-  mockAsignaturas,
-  getRamosDocente,
-  getCarrerasByCoordinadorId,
-  type EstadoValidacion,
-  type DocenteAcademico
-} from '../../data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -21,6 +12,14 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '../../components/ui/accordion';
+import {
+  getDocentesPorCarrera,
+  getGruposPorCarrera,
+  type DocenteAcademico,
+  type GrupoAcademico
+} from '../../data/academico';
+
+type EstadoValidacion = 'Validado' | 'Por Revisar' | 'Inexistente';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers de presentación (badges)
@@ -35,125 +34,107 @@ function badgeEstado(estado?: EstadoValidacion) {
   return <Badge variant="destructive" className="text-xs">Inexistente</Badge>;
 }
 
-function badgeNotas(ingresadas?: number, totales?: number) {
-  const ing = ingresadas ?? 0;
-  const tot = totales ?? 0;
-  if (tot <= 0) {
-    return <Badge variant="outline" className="text-xs text-gray-600">Sin cursos</Badge>;
-  }
-  const pct = Math.round((ing / tot) * 100);
-  let cls = 'border-green-600 bg-green-50 text-green-700';
-  if (ing === 0) cls = 'border-red-500 bg-red-50 text-red-700';
-  else if (ing < tot) cls = 'border-orange-500 bg-orange-50 text-orange-700';
-  return (
-    <div className="inline-flex items-center gap-1.5">
-      <Badge variant="outline" className={`${cls} font-semibold text-xs`}>{ing} / {tot}</Badge>
-      <span className="text-[10px] text-gray-500">{pct}%</span>
-    </div>
-  );
-}
+// Eliminamos badgeNotas porque ahora usamos badgeEstado para las notas
 
 export function GestionAcademica() {
   const navigate = useNavigate();
   
-  const coordinadorCarreraIdStr = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId');
-  const carreraFiltradaId = coordinadorCarreraIdStr;
-
-  // Modo supervisión: el supervisor solo visualiza, no valida
+  const coordinadorCarreraIdStr = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId') || '';
   const isReadOnly = !!sessionStorage.getItem('modoSupervision');
 
-  const docentes = useMemo(() => {
-    return mockDocentesAcademicos.filter(d => {
-      if (!carreraFiltradaId) return true; // Mostrar todos si no hay filtro de carrera
-      
-      const ramos = getRamosDocente(d.id);
-      return ramos.some(ramo => {
-        if (!ramo.carrera) return false;
-        const idsPermitidos = getCarrerasByCoordinadorId(carreraFiltradaId);
-        return idsPermitidos.includes(ramo.carrera.id);
-      });
-    });
-  }, [carreraFiltradaId]);
+  const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
+  const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // ─── Stats agregadas a nivel SECCIÓN (nueva fuente de verdad) ─────────────
+  useEffect(() => {
+    async function load() {
+      if (!coordinadorCarreraIdStr) return;
+      try {
+        const d = await getDocentesPorCarrera(coordinadorCarreraIdStr);
+        const g = await getGruposPorCarrera(coordinadorCarreraIdStr);
+        setDocentes(d);
+        setGrupos(g);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [coordinadorCarreraIdStr]);
+
+  // ─── Stats agregadas a nivel SECCIÓN ─────────────
   const stats = useMemo(() => {
-    const seccionesAsignadas = mockSeccionesAsignaturas.filter(s => s.docenteId);
-    const totalSec = seccionesAsignadas.length;
-    const blackboardOK = seccionesAsignadas.filter(s => s.contenidoBlackboard === 'Validado').length;
-    const notasOK = seccionesAsignadas.filter(s =>
-      (s.notasTotales ?? 0) > 0 && (s.notasIngresadas ?? 0) >= (s.notasTotales ?? 0)
-    ).length;
-    const guiaOK = seccionesAsignadas.filter(s => s.guiaAprendizaje === 'Validado').length;
+    const totalSec = grupos.length;
+    const blackboardOK = grupos.filter(s => s.contenido_blackboard === 'Validado').length;
+    const notasOK = grupos.filter(s => s.notas_estado === 'Validado').length;
+    const guiaOK = grupos.filter(s => s.guia_aprendizaje === 'Validado').length;
+    
     const docsCompletos = docentes.filter(d =>
-      d.cvActualizado === 'Validado' &&
-      d.certificadoTitulo === 'Validado' &&
-      d.certificadoAntecedentes === 'Validado' &&
-      d.certificadoInhabilidad === 'Validado' &&
-      d.carnetIdentidad === 'Validado'
+      d.estado_cv === 'Validado' &&
+      d.estado_titulo === 'Validado' &&
+      d.estado_antecedentes === 'Validado' &&
+      d.estado_inhabilidad === 'Validado'
     ).length;
+    
     return { totalDocentes: docentes.length, totalSec, blackboardOK, notasOK, guiaOK, docsCompletos };
-  }, [docentes]);
+  }, [docentes, grupos]);
 
   // Construye el array de docs personales del docente (orden estable)
   const docsPersonales = (d: DocenteAcademico) => [
-    { label: 'CV Actualizado', estado: d.cvActualizado },
-    { label: 'Cert. Título', estado: d.certificadoTitulo },
-    { label: 'Cert. Antecedentes', estado: d.certificadoAntecedentes },
-    { label: 'Cert. Inhabilidad', estado: d.certificadoInhabilidad },
-    { label: 'Carnet Identidad', estado: d.carnetIdentidad }
+    { label: 'CV Actualizado', estado: d.estado_cv },
+    { label: 'Cert. Título', estado: d.estado_titulo },
+    { label: 'Cert. Antecedentes', estado: d.estado_antecedentes },
+    { label: 'Cert. Inhabilidad', estado: d.estado_inhabilidad }
   ];
 
-  const irValidarAcademicos = (docenteId: number, seccionId: number) =>
-    navigate(`/academico/validar-docente/${docenteId}?tipo=academico&seccion=${seccionId}`);
+  const irValidarAcademicos = (rutDocente: number, seccionId: number) =>
+    navigate(`/academico/validar-docente/${rutDocente}?tipo=academico&seccion=${seccionId}`);
 
-  const irValidarPersonales = (docenteId: number) =>
-    navigate(`/academico/validar-docente/${docenteId}?tipo=personal`);
+  const irValidarPersonales = (rutDocente: number) =>
+    navigate(`/academico/validar-docente/${rutDocente}?tipo=personal`);
 
   // ─── Filtros ───────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState('');
   const [asignaturaId, setAsignaturaId] = useState<string>('all');
 
-  // Opciones de select: todas las asignaturas con al menos un docente asignado
+  // Opciones de select: todas las asignaturas únicas de los grupos actuales
   const asignaturasOptions = useMemo(() => {
-    const ids = new Set<number>();
-    mockSeccionesAsignaturas.forEach(s => {
-      if (!s.docenteId) return;
-      const a = mockAsignaturas.find(x => x.id === s.asignaturaId);
-      if (!a) return;
-      ids.add(a.id);
+    const map = new Map<string, { id_curso: string, nombre_curso: string }>();
+    grupos.forEach(g => {
+      if (!map.has(g.id_curso)) {
+        map.set(g.id_curso, { id_curso: g.id_curso, nombre_curso: g.nombre_curso });
+      }
     });
-    return mockAsignaturas.filter(a => ids.has(a.id));
-  }, []);
+    return Array.from(map.values());
+  }, [grupos]);
 
   // Listado filtrado (AND de los 3 criterios)
   const filteredDocentes = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
-    const asignaturaNum = asignaturaId === 'all' ? null : Number(asignaturaId);
-
+    
     return docentes.filter(d => {
       // Búsqueda por nombre o RUT
       if (search) {
-        const nombre = d.nombreCompleto.toLowerCase();
-        const rut = d.rut.toLowerCase();
+        const nombre = d.nombre.toLowerCase();
+        const rut = String(d.rut_docente).toLowerCase();
         if (!nombre.includes(search) && !rut.includes(search)) return false;
       }
-      // Filtro por asignatura: requiere ramos del docente
-      if (asignaturaNum !== null) {
-        const ramos = getRamosDocente(d.id);
-        if (ramos.length === 0) return false;
-        const matches = ramos.some(({ asignatura }) => {
-          if (!asignatura) return false;
-          if (asignaturaNum !== null && asignatura.id !== asignaturaNum) return false;
-          return true;
-        });
-        if (!matches) return false;
+      // Filtro por asignatura
+      if (asignaturaId !== 'all') {
+        const dGrupos = grupos.filter(g => g.rut_docente === d.rut_docente);
+        if (dGrupos.length === 0) return false;
+        const hasMatch = dGrupos.some(g => g.id_curso === asignaturaId);
+        if (!hasMatch) return false;
       }
       return true;
     });
-  }, [docentes, searchTerm, asignaturaId]);
+  }, [docentes, grupos, searchTerm, asignaturaId]);
 
   const filtrosActivos = searchTerm.trim() !== '' || asignaturaId !== 'all';
   const limpiarFiltros = () => { setSearchTerm(''); setAsignaturaId('all'); };
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>;
 
   return (
     <div className="space-y-6">
@@ -164,7 +145,7 @@ export function GestionAcademica() {
         </p>
       </div>
 
-      {/* Estadísticas (agregadas por sección) */}
+      {/* Estadísticas */}
       <div className="grid gap-6 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
@@ -251,8 +232,8 @@ export function GestionAcademica() {
                 <SelectContent>
                   <SelectItem value="all">Todas las asignaturas</SelectItem>
                   {asignaturasOptions.map(a => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      <span className="font-mono">{a.sigla}</span> · {a.nombre}
+                    <SelectItem key={a.id_curso} value={a.id_curso}>
+                      <span className="font-mono">{a.id_curso}</span> · {a.nombre_curso}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -289,24 +270,22 @@ export function GestionAcademica() {
           ) : (
           <Accordion type="multiple" className="w-full space-y-3">
           {filteredDocentes.map(docente => {
-            const ramos = getRamosDocente(docente.id);
+            const ramos = grupos.filter(g => g.rut_docente === docente.rut_docente);
             const personales = docsPersonales(docente);
             const personalesCompletos = personales.every(p => p.estado === 'Validado');
-            const academicosCompletos = ramos.length > 0 && ramos.every(({ seccion }) =>
-              seccion.contenidoBlackboard === 'Validado' &&
-              (seccion.notasTotales ?? 0) > 0 &&
-              (seccion.notasIngresadas ?? 0) >= (seccion.notasTotales ?? 0) &&
-              seccion.guiaAprendizaje === 'Validado'
+            const academicosCompletos = ramos.length > 0 && ramos.every(seccion =>
+              seccion.contenido_blackboard === 'Validado' &&
+              seccion.notas_estado === 'Validado' &&
+              seccion.guia_aprendizaje === 'Validado'
             );
             const todoCompleto = personalesCompletos && academicosCompletos && ramos.length > 0;
 
             return (
               <AccordionItem
-                key={docente.id}
-                value={`docente-${docente.id}`}
+                key={docente.rut_docente}
+                value={`docente-${docente.rut_docente}`}
                 className="rounded-lg border bg-white overflow-hidden"
               >
-                {/* Trigger del docente (vista colapsada) */}
                 <AccordionTrigger className="px-4 py-3 hover:bg-gray-50 hover:no-underline data-[state=open]:bg-gray-50 data-[state=open]:border-b">
                   <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-3">
                     <div className="flex items-center gap-3 text-left">
@@ -314,9 +293,9 @@ export function GestionAcademica() {
                         <User className="h-5 w-5 text-green-600" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-sm">{docente.nombreCompleto}</h3>
+                        <h3 className="font-semibold text-sm">{docente.nombre}</h3>
                         <p className="text-xs text-gray-500 font-normal">
-                          <span className="font-mono">{docente.rut}</span>
+                          <span className="font-mono">{docente.rut_docente}-{docente.dv}</span>
                           <span className="mx-1.5">·</span>
                           {ramos.length === 0
                             ? 'Sin ramos asignados'
@@ -338,9 +317,7 @@ export function GestionAcademica() {
                   </div>
                 </AccordionTrigger>
 
-                {/* Contenido expandido: académicos + personales */}
                 <AccordionContent className="pb-0">
-                  {/* Académicos por ramo */}
                   <div className="border-b p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-green-600" />
@@ -350,36 +327,32 @@ export function GestionAcademica() {
                   {ramos.length === 0 ? (
                     <p className="text-xs italic text-gray-400">Este docente no tiene ramos asignados este semestre.</p>
                   ) : ramos.length === 1 ? (
-                    // 1 ramo → render inline (sin acordeón)
                     <RamoBloque
-                      sigla={ramos[0].asignatura?.sigla ?? '—'}
-                      nombre={ramos[0].asignatura?.nombre ?? '—'}
-                      seccionNum={ramos[0].seccion.seccion}
-                      contenido={ramos[0].seccion.contenidoBlackboard}
-                      notasIng={ramos[0].seccion.notasIngresadas}
-                      notasTot={ramos[0].seccion.notasTotales}
-                      guia={ramos[0].seccion.guiaAprendizaje}
-                      onValidar={() => irValidarAcademicos(docente.id, ramos[0].seccion.id)}
+                      sigla={ramos[0].id_curso}
+                      nombre={ramos[0].nombre_curso}
+                      seccionNum={ramos[0].seccion}
+                      contenido={ramos[0].contenido_blackboard}
+                      notasEstado={ramos[0].notas_estado}
+                      guia={ramos[0].guia_aprendizaje}
+                      onValidar={() => irValidarAcademicos(docente.rut_docente, ramos[0].id_grupo)}
                       readOnly={isReadOnly}
                     />
                   ) : (
-                    // 2+ ramos → acordeón
                     <Accordion type="multiple" className="w-full">
-                      {ramos.map(({ seccion, asignatura }) => {
+                      {ramos.map((seccion) => {
                         const ramoCompleto =
-                          seccion.contenidoBlackboard === 'Validado' &&
-                          (seccion.notasTotales ?? 0) > 0 &&
-                          (seccion.notasIngresadas ?? 0) >= (seccion.notasTotales ?? 0) &&
-                          seccion.guiaAprendizaje === 'Validado';
+                          seccion.contenido_blackboard === 'Validado' &&
+                          seccion.notas_estado === 'Validado' &&
+                          seccion.guia_aprendizaje === 'Validado';
 
                         return (
-                          <AccordionItem key={seccion.id} value={`ramo-${seccion.id}`} className="border rounded-md mb-2 px-3">
+                          <AccordionItem key={seccion.id_grupo} value={`ramo-${seccion.id_grupo}`} className="border rounded-md mb-2 px-3">
                             <AccordionTrigger className="py-3 hover:no-underline">
                               <div className="flex flex-1 items-center justify-between pr-3 text-sm">
                                 <span className="flex items-center gap-2">
                                   <BookOpen className="h-4 w-4 text-green-600" />
-                                  <span className="font-mono font-semibold">{asignatura?.sigla ?? '—'}</span>
-                                  <span className="text-gray-700">{asignatura?.nombre ?? '—'}</span>
+                                  <span className="font-mono font-semibold">{seccion.id_curso}</span>
+                                  <span className="text-gray-700">{seccion.nombre_curso}</span>
                                   <span className="text-gray-500">· Sec {seccion.seccion}</span>
                                 </span>
                                 {ramoCompleto ? (
@@ -395,14 +368,13 @@ export function GestionAcademica() {
                             </AccordionTrigger>
                             <AccordionContent className="pt-2">
                               <RamoBloque
-                                sigla={asignatura?.sigla ?? '—'}
-                                nombre={asignatura?.nombre ?? '—'}
+                                sigla={seccion.id_curso}
+                                nombre={seccion.nombre_curso}
                                 seccionNum={seccion.seccion}
-                                contenido={seccion.contenidoBlackboard}
-                                notasIng={seccion.notasIngresadas}
-                                notasTot={seccion.notasTotales}
-                                guia={seccion.guiaAprendizaje}
-                                onValidar={() => irValidarAcademicos(docente.id, seccion.id)}
+                                contenido={seccion.contenido_blackboard}
+                                notasEstado={seccion.notas_estado}
+                                guia={seccion.guia_aprendizaje}
+                                onValidar={() => irValidarAcademicos(docente.rut_docente, seccion.id_grupo)}
                                 hideHeader
                                 readOnly={isReadOnly}
                               />
@@ -414,7 +386,6 @@ export function GestionAcademica() {
                   )}
                 </div>
 
-                {/* Personales (una sola vez por docente) */}
                 <div className="p-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -424,7 +395,7 @@ export function GestionAcademica() {
                     <Button
                       size="sm"
                       variant={isReadOnly || personalesCompletos ? 'outline' : 'default'}
-                      onClick={() => irValidarPersonales(docente.id)}
+                      onClick={() => irValidarPersonales(docente.rut_docente)}
                       className={isReadOnly || personalesCompletos ? '' : 'bg-blue-600 hover:bg-blue-700'}
                     >
                       <FileCheck className="mr-1.5 h-4 w-4" />
@@ -432,7 +403,7 @@ export function GestionAcademica() {
                       <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <div className="grid gap-2 md:grid-cols-5">
+                  <div className="grid gap-2 md:grid-cols-4">
                     {personales.map(doc => (
                       <div key={doc.label} className="flex flex-col gap-1 rounded-md border bg-gray-50 p-2">
                         <span className="text-[11px] text-gray-600">{doc.label}</span>
@@ -461,15 +432,14 @@ function RamoBloque(props: {
   nombre: string;
   seccionNum: number;
   contenido?: EstadoValidacion;
-  notasIng?: number;
-  notasTot?: number;
+  notasEstado?: EstadoValidacion;
   guia?: EstadoValidacion;
   onValidar: () => void;
   hideHeader?: boolean;
   readOnly?: boolean;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-3">
       {!props.hideHeader && (
         <div className="flex items-center gap-2 text-sm">
           <BookOpen className="h-4 w-4 text-green-600" />
@@ -485,7 +455,7 @@ function RamoBloque(props: {
         </div>
         <div className="flex flex-col gap-1 rounded-md border bg-gray-50 p-2">
           <span className="text-[11px] text-gray-600">Notas al Día</span>
-          {badgeNotas(props.notasIng, props.notasTot)}
+          {badgeEstado(props.notasEstado)}
         </div>
         <div className="flex flex-col gap-1 rounded-md border bg-gray-50 p-2">
           <span className="text-[11px] text-gray-600">Guía de Aprendizaje</span>

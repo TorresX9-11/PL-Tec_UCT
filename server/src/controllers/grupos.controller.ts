@@ -5,6 +5,7 @@ import {
   UpdateGrupoSchema,
 } from '../schemas/grupos.schema.js';
 import * as gruposService from '../services/grupos.service.js';
+import { registrarEvento } from '../services/historial.service.js';
 import { HttpError } from '../middleware/error.js';
 
 /**
@@ -31,6 +32,16 @@ export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateGrupoSchema.parse(req.body);
 
   const created = await gruposService.createGrupo(input);
+
+  await registrarEvento({
+    tipo: 'Designación',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    rut_docente: input.rut_docente || null,
+    descripcion: `Se creó y asignó horas a la sección ${input.seccion} del curso ${input.id_curso}`,
+    estado: 'Completado'
+  });
+
   res.status(201).json({ data: created });
 }
 
@@ -42,6 +53,16 @@ export async function update(req: Request, res: Response): Promise<void> {
   if (!updated) {
     throw new HttpError(404, 'NOT_FOUND', `Grupo '${id}' no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Designación',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    rut_docente: input.rut_docente || null,
+    descripcion: `Se actualizaron las horas PMA o el docente de la sección ${updated.seccion} del curso ${updated.id_curso}`,
+    estado: 'Actualizado'
+  });
+
   res.json({ data: updated });
 }
 
@@ -51,5 +72,14 @@ export async function remove(req: Request, res: Response): Promise<void> {
   if (!ok) {
     throw new HttpError(404, 'NOT_FOUND', `Grupo '${id}' no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Designación',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    descripcion: `Se eliminó la designación/sección (ID: ${id})`,
+    estado: 'Eliminado'
+  });
+
   res.status(204).send();
 }

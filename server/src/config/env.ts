@@ -11,7 +11,7 @@ const EnvSchema = z.object({
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:5173')
-    .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
+    .transform((s: string) => s.split(',').map((o: string) => o.trim()).filter(Boolean)),
 
   DB_HOST: z.string().default('127.0.0.1'),
   DB_PORT: z.coerce.number().int().positive().default(3306),
@@ -24,11 +24,11 @@ const EnvSchema = z.object({
     .string()
     .min(32, 'JWT_SECRET debe tener al menos 32 caracteres')
     .refine(
-      (val) => !val.includes('change-me'),
+      (val: string) => !val.includes('change-me'),
       'JWT_SECRET no puede ser el valor por defecto. Genera uno fuerte con: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"',
     )
     .refine(
-      (val) => !/^[a-zA-Z]+$/.test(val),
+      (val: string) => !/^[a-zA-Z]+$/.test(val),
       'JWT_SECRET debe incluir números y/o caracteres especiales para mayor seguridad',
     ),
   JWT_EXPIRES_IN: z.string().default('8h'),

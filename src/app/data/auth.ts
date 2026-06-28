@@ -16,6 +16,9 @@ export type Nivel = 'docente' | 'coordinador' | 'academico' | 'supervisor' | 'ad
 export interface AuthUser {
   correo: string;
   nivel: Nivel;
+  nombre?: string;
+  id_carrera?: string;
+  rut_docente?: number;
 }
 
 interface LoginResponse {
@@ -35,13 +38,26 @@ export async function login(correo: string, contrasena: string): Promise<AuthUse
     correo_usuario: correo.trim(),
     contrasena,
   });
+  
+  const user: AuthUser = res.user;
+
+  // Guardar en sessionStorage para que la app sepa quién está conectado.
   setToken(res.token);
-  try {
-    sessionStorage.setItem(USER_KEY, JSON.stringify(res.user));
-  } catch {
-    /* ignore */
+  sessionStorage.setItem('tec_auth_token', res.token);
+  sessionStorage.setItem('tec_auth_user', JSON.stringify(user));
+  
+  // Si la API no retorna el nombre (por si acaso), rellenamos con correo
+  sessionStorage.setItem('userName', user.nombre || user.correo);
+  sessionStorage.setItem('userRole', user.nivel);
+  
+  if (user.id_carrera) {
+    sessionStorage.setItem('coordinadorCarreraId', user.id_carrera);
   }
-  return res.user;
+  if (user.rut_docente) {
+    sessionStorage.setItem('docenteId', user.rut_docente.toString());
+  }
+
+  return user;
 }
 
 /** Usuario autenticado actual (o null si no hay sesión). */

@@ -5,6 +5,7 @@ import {
   UpdateDocenteSchema,
 } from '../schemas/docentes.schema.js';
 import * as docentesService from '../services/docentes.service.js';
+import { registrarEvento } from '../services/historial.service.js';
 import { HttpError } from '../middleware/error.js';
 
 /**
@@ -36,6 +37,16 @@ export async function create(req: Request, res: Response): Promise<void> {
   }
 
   const created = await docentesService.createDocente(input);
+  
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    rut_docente: created.rut_docente,
+    descripcion: `Se registró al nuevo docente ${created.nombre}`,
+    estado: 'Completado'
+  });
+
   res.status(201).json({ data: created });
 }
 
@@ -47,6 +58,16 @@ export async function update(req: Request, res: Response): Promise<void> {
   if (!updated) {
     throw new HttpError(404, 'NOT_FOUND', `Docente con RUT '${id}' no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    rut_docente: id,
+    descripcion: `Se actualizaron los datos personales del docente`,
+    estado: 'Actualizado'
+  });
+
   res.json({ data: updated });
 }
 
@@ -56,5 +77,15 @@ export async function remove(req: Request, res: Response): Promise<void> {
   if (!ok) {
     throw new HttpError(404, 'NOT_FOUND', `Docente con RUT '${id}' no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    rut_docente: id,
+    descripcion: `Se eliminó al docente del sistema`,
+    estado: 'Eliminado'
+  });
+
   res.status(204).send();
 }

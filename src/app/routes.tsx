@@ -62,6 +62,7 @@ export const router = createBrowserRouter([
     children: [
       { path: 'dashboard', Component: SupervisorDashboard },
       { path: 'coordinadores', Component: Coordinadores },
+      { path: 'usuarios', Component: Usuarios },
     ],
   },
 

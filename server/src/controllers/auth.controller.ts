@@ -38,10 +38,34 @@ export async function login(req: Request, res: Response): Promise<void> {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Credenciales inválidas.');
   }
 
+  // Obtener datos específicos según el rol
+  let id_carrera: string | undefined;
+  let rut_docente: number | undefined;
+
+  if (user.nivel === 'coordinador') {
+    const [coordRows] = await pool.execute<any[]>(
+      'SELECT id_carrera FROM coordinadores WHERE correo_usuario = :correo_usuario LIMIT 1',
+      { correo_usuario: user.correo_usuario }
+    );
+    if (coordRows.length > 0) {
+      id_carrera = coordRows[0].id_carrera;
+    }
+  } else if (user.nivel === 'docente') {
+    const [docRows] = await pool.execute<any[]>(
+      'SELECT rut_docente FROM docentes WHERE correo_usuario = :correo_usuario LIMIT 1',
+      { correo_usuario: user.correo_usuario }
+    );
+    if (docRows.length > 0) {
+      rut_docente = docRows[0].rut_docente;
+    }
+  }
+
   // Generar token JWT
   const token = signToken({
     correo: user.correo_usuario,
     nivel: user.nivel,
+    id_carrera,
+    rut_docente,
   });
 
   res.json({
@@ -49,6 +73,9 @@ export async function login(req: Request, res: Response): Promise<void> {
     user: {
       correo: user.correo_usuario,
       nivel: user.nivel,
+      nombre: user.nombre,
+      id_carrera,
+      rut_docente
     },
   });
 }

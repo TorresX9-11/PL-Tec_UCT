@@ -34,6 +34,9 @@ export async function create(req: Request, res: Response): Promise<void> {
   res.status(201).json({ data: created });
 }
 
+import { registrarEvento } from '../services/historial.service.js';
+import * as propuestasService from '../services/propuestas.service.js';
+
 export async function update(req: Request, res: Response): Promise<void> {
   const { id } = PagoIdParamSchema.parse(req.params);
   const input = UpdatePagoSchema.parse(req.body);
@@ -42,6 +45,23 @@ export async function update(req: Request, res: Response): Promise<void> {
   if (!updated) {
     throw new HttpError(404, 'NOT_FOUND', `Pago '${id}' no encontrado.`);
   }
+
+  try {
+    const propuesta = await propuestasService.findPropuestaById(updated.id_propuesta);
+    if (input.estado_pago) {
+      await registrarEvento({
+        tipo: 'Pago',
+        modulo: 'BandejaBoletas',
+        actor: 'Admin',
+        rut_docente: propuesta?.rut_docente,
+        descripcion: `El estado del pago #${id} cambió a ${input.estado_pago}`,
+        estado: input.estado_pago
+      });
+    }
+  } catch(e) {
+    console.error('Error guardando historial de pago', e);
+  }
+
   res.json({ data: updated });
 }
 

@@ -10,6 +10,9 @@ import archivosRouter from './archivos.js';
 import capacitacionesRouter from './capacitaciones.js';
 import coordinadoresRouter from './coordinadores.js';
 import authRouter from './auth.js';
+import correosRouter from './correos.js';
+import { historialRouter } from './historial.js';
+import { academicoRouter } from './academico.js';
 
 /**
  * Router raíz para `/api/v1`.
@@ -38,5 +41,8 @@ apiRouter.use('/archivos', archivosRouter);
 apiRouter.use('/capacitaciones', capacitacionesRouter);
 apiRouter.use('/coordinadores', coordinadoresRouter);
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/correos', correosRouter);
+apiRouter.use('/historial', historialRouter);
+apiRouter.use('/academico', academicoRouter);
 
 export default apiRouter;

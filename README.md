@@ -1,154 +1,80 @@
-# Plataforma TEC — UCT (P_LAB_TEC)
+# Plataforma TEC — Universidad Católica de Temuco (P_LAB_TEC)
 
-Plataforma web interna del área **TEC** de la **Universidad Católica de Temuco** para la administración de docentes a honorarios y la gestión del módulo académico (asignaturas, secciones, notas, contenido en Blackboard, propuestas económicas y pagos).
+Plataforma web interna del área **TEC** de la **Universidad Católica de Temuco** para la administración de docentes a honorarios y la gestión del módulo académico. 
 
-> Aplicación **no pública**, de uso interno. El frontend es una SPA estática servible desde cualquier servidor (Apache/Nginx/IIS) y consumirá un backend PHP REST cuando esté disponible.
-
----
-
-## Stack
-
-- **Frontend:** React 18 + TypeScript + Vite 6
-- **UI:** TailwindCSS v4 + shadcn/ui (Radix) + MUI + `lucide-react`
-- **Routing:** `react-router` v7
-- **Datos:** mocks en `src/app/data/mockData.ts` (sin backend conectado todavía)
-- **PDF / Reportes:** `jspdf` + `jspdf-autotable` + `recharts`
-- **Gestor de paquetes:** **pnpm** vía Corepack (no usar `npm`)
+> **IMPORTANTE:** Este documento sirve como la única fuente de verdad y bitácora viva del proyecto. **Cualquier cambio futuro que sea probado y confirmado debe ser registrado obligatoriamente en la sección de Registro de Cambios.**
 
 ---
 
-## Requisitos
+## 🚀 Inicialización del Proyecto
 
+El proyecto está configurado como un **Monorepo** utilizando `pnpm` (a través de Corepack), que contiene tanto el frontend (React) en la raíz, como el backend (Node.js/Express) en el directorio `server/`.
+
+### Requisitos Previos
 - Node.js 20+
 - Corepack habilitado (`corepack enable`)
-- pnpm 11.x (lo provee Corepack según `packageManager` en `package.json`)
+- Base de datos MySQL / MariaDB ejecutándose (puerto 3306)
+
+### Pasos de Instalación y Ejecución
+
+1. **Clonar e instalar dependencias:**
+   Abre una terminal en la raíz del proyecto y ejecuta:
+   ```powershell
+   corepack pnpm install
+   ```
+   *(Esto instalará automáticamente las dependencias del frontend y del backend gracias a la configuración del workspace en `pnpm-workspace.yaml`).*
+
+2. **Configurar Base de Datos:**
+   - Importa el esquema inicial de la base de datos ubicado en `database/schema.sql` a tu servidor MySQL local.
+   - Crea un archivo `.env` en la carpeta `server/` con tus credenciales de base de datos basándote en el `server/.env.example` (o ajusta el usuario `root` y clave por defecto).
+
+3. **Levantar el Servidor Backend:**
+   En una terminal nueva, asegúrate de estar dentro de la carpeta `server/` y ejecuta:
+   ```powershell
+   cd server
+   corepack pnpm dev
+   ```
+   *(El backend se ejecutará y escuchará peticiones en http://localhost:3001, confirmando la conexión a la base de datos).*
+
+4. **Levantar el Frontend:**
+   En otra terminal separada, desde la raíz del proyecto, ejecuta:
+   ```powershell
+   corepack pnpm run dev
+   ```
+   *(El frontend estará disponible para abrir en el navegador en http://localhost:5173).*
 
 ---
 
-## Instalación y desarrollo
+## 🏗️ Arquitectura y Stack Tecnológico
 
-```powershell
-# 1) Habilitar corepack (una sola vez por máquina)
-corepack enable
-
-# 2) Instalar dependencias
-corepack pnpm install
-
-# 3) Levantar dev server
-#    Workaround por bug de pnpm v11 con build scripts nativos
-#    (esbuild / @tailwindcss/oxide / core-js quedan bloqueados a la espera de aprobación)
-.\node_modules\.bin\vite.cmd --port 5173
-```
-
-App disponible en <http://localhost:5173/>.
-
-### Build de producción
-
-```powershell
-corepack pnpm build
-``` 
-
-El bundle estático queda en `dist/` y puede servirse desde cualquier servidor HTTP.
+- **Frontend:** React 18, TypeScript, Vite 6, TailwindCSS v4, shadcn/ui.
+- **Backend:** Node.js, Express, TypeScript, Zod (validaciones API), pdfkit & archiver (generación de documentos históricos).
+- **Base de Datos:** MySQL / MariaDB (Driver `mysql2`).
+- **Gestor de paquetes:** `pnpm` (en modo workspace).
 
 ---
 
-## Estructura del proyecto
+## 📝 Registro de Cambios Implementados
 
-```
-PL-Tec_UCT/
-├── database/                # Esquema SQL del cliente (ver database/README.md)
-│   └── schema.sql
-├── guidelines/              # Lineamientos del proyecto
-├── src/
-│   ├── app/
-│   │   ├── data/            # mockData.ts (estado simulado)
-│   │   ├── pages/           # Páginas por rol (admin / academico / docente)
-│   │   ├── components/      # Componentes shadcn/ui + propios
-│   │   └── routes.tsx       # Definición de rutas
-│   ├── styles/
-│   └── main.tsx
-├── index.html
-├── vite.config.ts
-├── package.json
-├── PROGRESO.md              # Bitácora viva del proyecto (LEER PRIMERO)
-└── RESUMEN_PLATAFORMA_TEC.md
-```
+A continuación, se detalla el progreso y las implementaciones confirmadas en el sistema. 
 
----
+> **Regla de Desarrollo:** Cada cambio que se implemente a partir de ahora, tras ser validado y confirmado en pruebas, debe anexarse a esta lista para mantener el histórico consolidado.
 
-## Rutas principales
+### 1. Conexión al Backend y Estructura Monorepo
+- Se transformó el proyecto en un monorepo administrado de forma limpia por `pnpm`, con el frontend en la raíz y el backend en el subdirectorio `/server`.
+- El backend fue inicializado de cero con Express y TypeScript (ESM), resolviendo configuraciones y conflictos de dependencias (ESM vs CJS).
+- Se configuró el cliente HTTP en el frontend (`apiClient.ts`) para consumir los recursos estáticos y los endpoints del puerto `3001`.
 
-### Público
-- `/` — Landing
+### 2. Base de Datos y Modelado de Datos
+- **Esquema Inicial:** Se integró formalmente el esquema de tablas proporcionado por el cliente en `database/schema.sql`.
+- **Nuevas Tablas de Historial:** Se agregaron las tablas `historial_activo` (para registrar acciones "vivas" del semestre en curso) y `archivos_historicos` (para almacenar el registro consolidado al final del semestre). Se implementó integridad referencial mediante `ON DELETE SET NULL` hacia la tabla de `docentes`.
 
-### Admin (`/admin/*`)
-- `/admin/login`
-- `/admin/dashboard`
-- `/admin/carreras-asignaturas`
-- `/admin/docentes`
-- `/admin/reportes`
+### 3. Backend: Integración del Módulo Historial ("Archivado Duro")
+- Se crearon los endpoints bajo `/api/v1/historial/` para consultar el historial en vivo y los archivos históricos.
+- Se inyectó código automatizado (`registrarEvento()`) en los controladores de subida de archivos y gestión de pagos para poblar la tabla `historial_activo` de manera transparente.
+- **Cierre de Semestre:** Se programó un servicio `cerrarSemestre()` que genera un documento PDF maestro con todo el registro usando `pdfkit`, compila un archivo `.zip` usando `archiver` con todos los respaldos documentales y boletas subidas por los docentes, registra las URLs en `archivos_historicos`, y ejecuta un `TRUNCATE` sobre `historial_activo` para purgar la base de datos viva y ahorrar costos operativos.
 
-### Académico (`/academico/*`)
-- `/academico/login`
-- `/academico/dashboard`
-- `/plataforma-docentes`
-- `/gestion-academica`
-- `/validar-docente/:id`
-- `/acreditacion`
-- `/reportes`
-
-### Docente (`/docente/*`)
-- `/docente/dashboard`
-- `/cv`, `/certificados`, `/capacitaciones`, `/boletas`
-
----
-
-## Reglas de negocio clave
-
-- **Cuotas de pago:** docentes diurnos → 4 (Abr–Jul); vespertinos → 5 (Abr–Ago).
-- **Niveles docente:** A / B / C (tarifas pendientes de confirmación por el cliente).
-- **Valor de propuesta:** se ingresa el **valor total** a nivel propuesta-docente (`propuestas.valor_propuesta`); el **valor hora** es derivado (`valor_propuesta / total_horas`).
-- **Lookup automático:** al seleccionar un docente en designación PMA se autocompletan RUT, DV y nivel desde la tabla maestra.
-- **Borrado semestral:** acción protegida por clave + confirmación explícita.
-- **Carreras:** orden fijo (6 diurnas + 4 vespertinas), escalable a 10–12.
-- **Notas:** el avance se modela como `notasIngresadas / notasTotales` (alineado a `cursos.notas_ingresadas` / `cursos.notas_curso`).
-
----
-
-## Base de datos
-
-Esquema vigente entregado por el cliente en `database/schema.sql`. Ver `database/README.md` para detalle de tablas y cómo aplicarlo.
-
-Tablas principales: `usuarios`, `carreras`, `cursos`, `grupos`, `docentes`, `propuestas`, `pagos`, `archivos`, `capacitaciones`, `coordinadores`.
-
-El mapeo BD ↔ frontend está documentado en `PROGRESO.md` (sección 8).
-
----
-
-## Backend (futuro)
-
-PHP + API REST. Aún no implementado. Cuando exista:
-
-- Crear `src/app/data/api.ts` con funciones tipadas que devuelvan los mismos shapes que `mockData.ts`.
-- Reemplazar los imports de mocks por llamadas a la API sin tocar las vistas.
-
----
-
-## Documentación interna
-
-- **`PROGRESO.md`** — bitácora viva. **Leer primero** al retomar el proyecto en un chat nuevo.
-- **`RESUMEN_PLATAFORMA_TEC.md`** — estado extendido y especificación detallada.
-- **`guidelines/`** — lineamientos de diseño / código.
-- **`ATTRIBUTIONS.md`** — créditos.
-
----
-
-## Notas de pnpm v11
-
-pnpm 11 bloquea la ejecución de scripts de build nativos (`esbuild`, `@tailwindcss/oxide`, `core-js`) hasta aprobarlos manualmente. Mientras no se apruebe, `pnpm dev` puede quedar colgado: por eso se invoca `vite` directamente desde `node_modules\.bin\vite.cmd`.
-
----
-
-## Licencia
-
-Uso interno UCT — área TEC. No distribuir.
+### 4. Frontend: Actualización Visual del Historial
+- El panel de **Historial** de la vista del Administrador (`Historial.tsx`) fue refactorizado, pasando de usar Mocks a consumir la API real.
+- Se dividió la pantalla en dos pestañas claras: **Historial Activo** (registro de acciones en vivo) y **Archivos Históricos** (listado de semestres anteriores consolidados).
+- Se agregó el botón crítico **"Cerrar Semestre"**, el cual emite una advertencia de sistema antes de contactar al backend y detonar el purgado y archivado masivo. 

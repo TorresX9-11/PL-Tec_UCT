@@ -95,7 +95,7 @@ export async function updatePropuesta(
       return null;
     }
 
-    const oldCuotas = rows[0].cuotas;
+    const oldCuotas = rows[0]?.cuotas ?? 1;
 
     const updates: string[] = [];
     const params: Record<string, string | number> = { id };

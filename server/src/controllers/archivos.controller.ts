@@ -27,10 +27,25 @@ export async function getOne(req: Request, res: Response): Promise<void> {
   res.json({ data: archivo });
 }
 
+import { registrarEvento } from '../services/historial.service.js';
+
 export async function create(req: Request, res: Response): Promise<void> {
   const input = CreateArchivoSchema.parse(req.body);
 
   const created = await archivosService.createArchivo(input);
+  
+  try {
+    await registrarEvento({
+      tipo: 'Boleta',
+      modulo: 'Archivos',
+      actor: 'Sistema',
+      descripcion: `Se ha subido un nuevo archivo: ${created.ruta.split('/').pop()}`,
+      estado: 'Subida'
+    });
+  } catch (e) {
+    console.error('Error logueando historial', e);
+  }
+
   res.status(201).json({ data: created });
 }
 

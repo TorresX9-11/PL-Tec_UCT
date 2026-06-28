@@ -5,6 +5,7 @@ import {
   UpdateCursoSchema,
 } from '../schemas/cursos.schema.js';
 import * as cursosService from '../services/cursos.service.js';
+import { registrarEvento } from '../services/historial.service.js';
 import { HttpError } from '../middleware/error.js';
 
 /**
@@ -37,6 +38,15 @@ export async function create(req: Request, res: Response): Promise<void> {
   }
 
   const created = await cursosService.createCurso(input);
+
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    descripcion: `Se creó la asignatura ${input.nombre} (${input.id_curso})`,
+    estado: 'Completado'
+  });
+
   res.status(201).json({ data: created });
 }
 
@@ -46,8 +56,17 @@ export async function update(req: Request, res: Response): Promise<void> {
 
   const updated = await cursosService.updateCurso(id_carrera, id_curso, input);
   if (!updated) {
-    throw new HttpError(404, 'NOT_FOUND', `Curso '${id_carrera}/${id_curso}' no encontrado.`);
+    throw new HttpError(404, 'NOT_FOUND', `Curso no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    descripcion: `Se actualizó la asignatura ${id_curso}`,
+    estado: 'Actualizado'
+  });
+
   res.json({ data: updated });
 }
 
@@ -55,7 +74,16 @@ export async function remove(req: Request, res: Response): Promise<void> {
   const { id_carrera, id_curso } = CursoIdParamSchema.parse(req.params);
   const ok = await cursosService.deleteCurso(id_carrera, id_curso);
   if (!ok) {
-    throw new HttpError(404, 'NOT_FOUND', `Curso '${id_carrera}/${id_curso}' no encontrado.`);
+    throw new HttpError(404, 'NOT_FOUND', `Curso no encontrado.`);
   }
+
+  await registrarEvento({
+    tipo: 'Sistema',
+    modulo: 'Admin',
+    actor: 'Administrador',
+    descripcion: `Se eliminó la asignatura ${id_curso}`,
+    estado: 'Eliminado'
+  });
+
   res.status(204).send();
 }

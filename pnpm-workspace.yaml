@@ -1,5 +1,6 @@
 packages:
   - '.'
+  - 'server'
 allowBuilds:
   '@tailwindcss/oxide': true
   core-js: true

@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Eye, User, FileText, Award, Shield, Receipt, BookOpen } from 'lucide-react';
-import { mockDocentesAcademicos, getRamosDocente, getCarrerasByCoordinadorId } from '../../data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -8,53 +7,57 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { getDocentesPorCarrera, getGruposPorCarrera, type DocenteAcademico, type GrupoAcademico } from '../../data/academico';
+import { toast } from 'sonner';
 
 export function PlataformaDocentes() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocente, setSelectedDocente] = useState<number | null>(null);
-  const coordinadorCarreraIdStr = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId');
-  const carreraFiltradaId = coordinadorCarreraIdStr;
+  const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
+  const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Filtrar los docentes:
-  // Si el coordinador/supervisor tiene una carreraId asignada, solo mostrar docentes que tengan
-  // al menos una sección asignada que pertenezca a esa carrera.
-  // Sino, mostrar todos (ej. para un administrador general si se diera el caso).
-  const docentesAsignados = mockDocentesAcademicos.filter(d => {
-    if (!carreraFiltradaId) return true; // Mostrar todos si no hay filtro de carrera
-    
-    // Obtener los ramos del docente y comprobar si alguno pertenece a la carrera asignada
-    // Nota: El coordinador tiene 'id_carrera' ej: 'INFO', pero las asignaturas apuntan a 'carreraId' (number)
-    // que enlaza con mockCarreras donde el codigo puede ser 'TUI-D' o 'TUI-V'.
-    // Simplificación para la demo: Asumimos que si la carrera filtrada no coincide directamente, 
-    // buscamos si el string del id_carrera del coordinador está incluido en el código de la carrera.
-    // Ej: INFO está en TUI-D? No, TUI-D no tiene INFO. Necesitamos un mapeo o chequear por ID si tuvieran la misma estructura.
-    // Para simplificar, revisemos si el coordinador (como Ana) tiene asignaturas.
-    const ramos = getRamosDocente(d.id);
-    return ramos.some(ramo => {
-      if (!ramo.carrera) return false;
-      const idsPermitidos = getCarrerasByCoordinadorId(carreraFiltradaId);
-      return idsPermitidos.includes(ramo.carrera.id);
-    });
-  });
+  const carreraFiltradaId = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId') || '';
 
-  const filteredDocentes = docentesAsignados.filter(d =>
-    d.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.rut.includes(searchTerm)
+  useEffect(() => {
+    async function loadData() {
+      if (!carreraFiltradaId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const [docs, grps] = await Promise.all([
+          getDocentesPorCarrera(carreraFiltradaId),
+          getGruposPorCarrera(carreraFiltradaId)
+        ]);
+        setDocentes(docs);
+        setGrupos(grps);
+      } catch (err) {
+        toast.error('No se pudieron cargar los docentes.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [carreraFiltradaId]);
+
+  const filteredDocentes = docentes.filter(d =>
+    d.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.rut_docente.toString().includes(searchTerm)
   );
 
-  const currentDocente = selectedDocente ? docentesAsignados.find(d => d.id === selectedDocente) : null;
+  const currentDocente = selectedDocente ? docentes.find(d => d.rut_docente === selectedDocente) : null;
 
   const estadisticas = {
-    totalDocentes: docentesAsignados.length,
-    documentacionCompleta: docentesAsignados.filter(
-      d => d.cvActualizado === 'Validado' && 
-           d.certificadoTitulo === 'Validado' && 
-           d.certificadoAntecedentes === 'Validado' && 
-           d.certificadoInhabilidad === 'Validado'
+    totalDocentes: docentes.length,
+    documentacionCompleta: docentes.filter(
+      d => d.estado_titulo === 'Validado' && 
+           d.estado_antecedentes === 'Validado' && 
+           d.estado_inhabilidad === 'Validado'
     ).length,
-    cvActualizados: docentesAsignados.filter(d => d.cvActualizado === 'Validado').length,
-    promedioCapacitaciones: docentesAsignados.length > 0 
-      ? Math.round(docentesAsignados.reduce((sum, d) => sum + d.capacitaciones, 0) / docentesAsignados.length)
+    cvActualizados: docentes.filter(d => d.estado_cv === 'Validado').length,
+    promedioCapacitaciones: docentes.length > 0 
+      ? Math.round(docentes.reduce((sum, d) => sum + d.capacitaciones, 0) / docentes.length)
       : 0
   };
 
@@ -155,28 +158,29 @@ export function PlataformaDocentes() {
               <TableBody>
                 {filteredDocentes.map((docente) => {
                   const certificadosCompletos =
-                    docente.certificadoTitulo === 'Validado' &&
-                    docente.certificadoAntecedentes === 'Validado' &&
-                    docente.certificadoInhabilidad === 'Validado';
+                    docente.estado_titulo === 'Validado' &&
+                    docente.estado_antecedentes === 'Validado' &&
+                    docente.estado_inhabilidad === 'Validado';
 
-                  const ramos = getRamosDocente(docente.id);
+                  // Filtrar grupos que pertenezcan a este docente
+                  const ramos = grupos.filter(g => g.rut_docente === docente.rut_docente);
 
                   return (
-                    <TableRow key={docente.id}>
-                      <TableCell className="font-medium">{docente.nombreCompleto}</TableCell>
-                      <TableCell className="font-mono text-sm">{docente.rut}</TableCell>
-                      <TableCell className="text-sm">{docente.correo}</TableCell>
+                    <TableRow key={docente.rut_docente}>
+                      <TableCell className="font-medium">{docente.nombre}</TableCell>
+                      <TableCell className="font-mono text-sm">{docente.rut_docente}-{docente.dv}</TableCell>
+                      <TableCell className="text-sm">{docente.correo_usuario}</TableCell>
                       <TableCell>
                         {ramos.length === 0 ? (
                           <span className="text-xs italic text-gray-400">Sin ramos asignados</span>
                         ) : (
                           <ul className="space-y-1">
-                            {ramos.map(({ seccion, asignatura }) => (
-                              <li key={seccion.id} className="flex items-start gap-1.5 text-xs">
+                            {ramos.map((g) => (
+                              <li key={g.id_grupo} className="flex items-start gap-1.5 text-xs">
                                 <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-green-600" />
                                 <span>
-                                  <span className="font-mono font-medium">{asignatura?.sigla ?? '—'}</span>
-                                  <span className="ml-1 text-gray-500">· Sec {seccion.seccion}</span>
+                                  <span className="font-mono font-medium">{g.id_curso}</span>
+                                  <span className="ml-1 text-gray-500">· Sec {g.seccion}</span>
                                 </span>
                               </li>
                             ))}
@@ -184,9 +188,9 @@ export function PlataformaDocentes() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {docente.cvActualizado === 'Validado' ? (
+                        {docente.estado_cv === 'Validado' ? (
                           <Badge variant="default" className="text-xs">Al día</Badge>
-                        ) : docente.cvActualizado === 'Por Revisar' ? (
+                        ) : docente.estado_cv === 'Por Revisar' ? (
                           <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                         ) : (
                           <Badge variant="destructive" className="text-xs">Pendiente</Badge>
@@ -204,12 +208,13 @@ export function PlataformaDocentes() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
+                          variant="ghost"
                           size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedDocente(docente.id)}
+                          onClick={() => setSelectedDocente(docente.rut_docente)}
+                          className="flex items-center gap-2"
                         >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Ver Perfil
+                          <Eye className="h-4 w-4" />
+                          <span className="sr-only">Ver detalles</span>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -229,15 +234,15 @@ export function PlataformaDocentes() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <User className="h-5 w-5 text-green-600" />
-                  {currentDocente.nombreCompleto}
+                  {currentDocente.nombre}
                 </DialogTitle>
                 <DialogDescription>
-                  RUT: {currentDocente.rut} | {currentDocente.correo}
+                  RUT: {currentDocente.rut_docente}-{currentDocente.dv} | {currentDocente.correo_usuario}
                 </DialogDescription>
               </DialogHeader>
 
               <Tabs defaultValue="perfil" className="mt-4">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="perfil">
                     <User className="mr-2 h-4 w-4" />
                     Perfil y CV
@@ -250,10 +255,6 @@ export function PlataformaDocentes() {
                     <Award className="mr-2 h-4 w-4" />
                     Capacitaciones
                   </TabsTrigger>
-                  <TabsTrigger value="boletas">
-                    <Receipt className="mr-2 h-4 w-4" />
-                    Boletas
-                  </TabsTrigger>
                 </TabsList>
 
                 {/* Perfil y CV */}
@@ -262,35 +263,32 @@ export function PlataformaDocentes() {
                     <CardHeader>
                       <CardTitle className="text-base">Currículum Vitae</CardTitle>
                       <CardDescription>
-                        Estado: {currentDocente.cvActualizado ? (
-                          <Badge variant="default" className="ml-2">Actualizado</Badge>
+                        Estado: {currentDocente.estado_cv === 'Validado' ? (
+                          <Badge variant="default" className="ml-2">Al Día</Badge>
+                        ) : currentDocente.estado_cv === 'Por Revisar' ? (
+                          <Badge variant="outline" className="ml-2 border-yellow-600 text-yellow-700">Por Revisar</Badge>
                         ) : (
                           <Badge variant="destructive" className="ml-2">Pendiente</Badge>
                         )}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="rounded-lg border p-4">
-                        <h4 className="font-medium">Datos Personales</h4>
-                        <p className="mt-2 text-sm text-gray-700">
-                          {currentDocente.nombreCompleto}<br />
-                          RUT: {currentDocente.rut}<br />
-                          Email: {currentDocente.correo}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border p-4">
-                        <h4 className="font-medium">Formación Académica</h4>
-                        <p className="mt-2 text-sm text-gray-700">
-                          Ingeniero Civil en Informática - Universidad Católica de Temuco (2010)<br />
-                          Magíster en Educación - Universidad de La Frontera (2015)
-                        </p>
-                      </div>
-                      <div className="rounded-lg border p-4">
-                        <h4 className="font-medium">Experiencia Profesional</h4>
-                        <p className="mt-2 text-sm text-gray-700">
-                          Docente UCT (2016 - Presente)<br />
-                          - Asignaturas: Programación, Base de Datos
-                        </p>
+                    <CardContent>
+                      <div className="flex flex-col items-center justify-center p-8 border border-dashed rounded-lg bg-gray-50">
+                        <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                        <h4 className="text-sm font-medium text-gray-900 mb-1">Curriculum Vitae</h4>
+                        {currentDocente.estado_cv === 'Inexistente' ? (
+                          <p className="text-xs text-gray-500">El docente aún no ha subido su CV.</p>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${currentDocente.rut_docente}_cv.pdf`, '_blank')}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            Ver PDF
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -305,13 +303,13 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoTitulo === 'Validado' ? (
+                          {currentDocente.estado_titulo === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_titulo.pdf</span>
                               <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
                             </>
-                          ) : currentDocente.certificadoTitulo === 'Por Revisar' ? (
+                          ) : currentDocente.estado_titulo === 'Por Revisar' ? (
                             <>
                               <FileText className="h-4 w-4 text-yellow-600" />
                               <span className="text-sm">certificado_titulo.pdf</span>
@@ -330,13 +328,13 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoAntecedentes === 'Validado' ? (
+                          {currentDocente.estado_antecedentes === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_antecedentes.pdf</span>
                               <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
                             </>
-                          ) : currentDocente.certificadoAntecedentes === 'Por Revisar' ? (
+                          ) : currentDocente.estado_antecedentes === 'Por Revisar' ? (
                             <>
                               <FileText className="h-4 w-4 text-yellow-600" />
                               <span className="text-sm">certificado_antecedentes.pdf</span>
@@ -355,13 +353,13 @@ export function PlataformaDocentes() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center gap-2">
-                          {currentDocente.certificadoInhabilidad === 'Validado' ? (
+                          {currentDocente.estado_inhabilidad === 'Validado' ? (
                             <>
                               <FileText className="h-4 w-4 text-green-600" />
                               <span className="text-sm">certificado_inhabilidad.pdf</span>
                               <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
                             </>
-                          ) : currentDocente.certificadoInhabilidad === 'Por Revisar' ? (
+                          ) : currentDocente.estado_inhabilidad === 'Por Revisar' ? (
                             <>
                               <FileText className="h-4 w-4 text-yellow-600" />
                               <span className="text-sm">certificado_inhabilidad.pdf</span>
@@ -440,46 +438,7 @@ export function PlataformaDocentes() {
                   </Card>
                 </TabsContent>
 
-                {/* Boletas */}
-                <TabsContent value="boletas" className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        Boletas de Honorarios ({currentDocente.boletas.length})
-                      </CardTitle>
-                      <CardDescription>
-                        Boletas subidas por el docente
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {currentDocente.boletas.length === 0 ? (
-                        <div className="py-8 text-center">
-                          <Receipt className="mx-auto h-12 w-12 text-gray-400" />
-                          <p className="mt-4 text-gray-600">No hay boletas registradas</p>
-                        </div>
-                      ) : (
-                        currentDocente.boletas.map((boleta) => (
-                          <div
-                            key={boleta.id}
-                            className="flex items-center gap-3 rounded-lg border p-3"
-                          >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                              <FileText className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium text-sm">{boleta.nombre}</h4>
-                              <p className="text-xs text-gray-600">{boleta.archivo}</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Subido el {boleta.fecha}
-                              </p>
-                            </div>
-                            <Badge variant="outline" className="text-xs">Disponible</Badge>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
+
               </Tabs>
             </>
           )}

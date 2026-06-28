@@ -27,6 +27,15 @@ export const notFoundHandler: RequestHandler = (req, res) => {
 };
 
 /**
+ * Wrapper para atrapar errores en rutas asíncronas de Express 4.
+ */
+export function asyncHandler(fn: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
+/**
  * Handler centralizado. Mapea errores conocidos a respuestas JSON consistentes.
  */
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {

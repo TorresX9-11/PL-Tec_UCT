@@ -5,11 +5,6 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
-import { 
-  mockDocentesAcademicos, 
-  mockCoordinadores, 
-  mockSupervisores 
-} from '../../data/mockData';
 import { login, type AuthUser } from '../../data/auth';
 import { ApiError } from '../../data/apiClient';
 
@@ -19,58 +14,26 @@ export function AcademicLogin() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  /**
-   * Login real exitoso: mapea el correo devuelto por el backend a la entidad
-   * mock correspondiente para poblar los IDs que el resto de la app aún lee de
-   * sessionStorage (docenteId, carrera, etc.) hasta que esos recursos se
-   * conecten en fases posteriores.
-   */
   const applyRealSession = (user: AuthUser) => {
-    const correoLower = user.correo.toLowerCase();
     switch (user.nivel) {
       case 'admin':
         toast.success('Inicio de sesión exitoso');
         navigate('/admin/dashboard');
         return;
       case 'supervisor': {
-        const sup = mockSupervisores.find(s => s.correo_usuario.toLowerCase() === correoLower);
-        sessionStorage.setItem('userRole', 'supervisor');
-        if (sup) {
-          sessionStorage.setItem('supervisorId', sup.id_supervisor.toString());
-          sessionStorage.setItem('supervisorNombre', sup.nombre);
-        }
-        toast.success(`Bienvenido/a ${sup?.nombre ?? user.correo}`);
+        toast.success(`Bienvenido/a ${user.nombre ?? user.correo}`);
         navigate('/supervisor/dashboard');
         return;
       }
-      case 'coordinador': {
-        const coord = mockCoordinadores.find(c => c.correo_usuario?.toLowerCase() === correoLower);
-        sessionStorage.setItem('userRole', 'admin_academico');
-        sessionStorage.setItem('userName', coord?.nombre ?? user.correo);
-        if (coord?.id_carrera) sessionStorage.setItem('coordinadorCarreraId', coord.id_carrera);
-        else sessionStorage.removeItem('coordinadorCarreraId');
-        toast.success(`Bienvenido/a ${coord?.nombre ?? user.correo}`);
-        navigate('/academico/dashboard');
-        return;
-      }
+      case 'coordinador':
       case 'academico': {
-        sessionStorage.setItem('userRole', 'admin_academico');
-        sessionStorage.setItem('userName', user.correo);
-        sessionStorage.removeItem('coordinadorCarreraId');
-        toast.success('Inicio de sesión exitoso');
+        toast.success(`Bienvenido/a ${user.nombre ?? user.correo}`);
         navigate('/academico/dashboard');
         return;
       }
       case 'docente': {
-        const doc = mockDocentesAcademicos.find(d => d.correo.toLowerCase() === correoLower);
-        sessionStorage.setItem('userRole', 'docente');
-        if (doc) {
-          sessionStorage.setItem('docenteId', doc.id.toString());
-          sessionStorage.setItem('docenteNombre', doc.nombreCompleto);
-          sessionStorage.setItem('docenteRut', doc.rut);
-        }
         sessionStorage.setItem('docente_check_mensajes', '1');
-        toast.success(`Bienvenido/a ${doc?.nombreCompleto ?? user.correo}`);
+        toast.success(`Bienvenido/a ${user.nombre ?? user.correo}`);
         navigate('/docente/dashboard');
         return;
       }
@@ -81,92 +44,16 @@ export function AcademicLogin() {
     e.preventDefault();
     setIsLoading(true);
 
-    // 1. Intentar login real contra el backend (JWT).
     try {
       const user = await login(username, password);
       applyRealSession(user);
-      setIsLoading(false);
-      return;
     } catch (err) {
-      // Si el backend no está disponible o las credenciales no existen aún en
-      // la BD, se cae al flujo mock (datos de demo) para no bloquear el trabajo.
       if (err instanceof ApiError && err.isNetwork) {
-        toast.warning('Sin conexión al backend: usando datos de demostración.');
+        toast.error('No se pudo conectar con el servidor.');
+      } else {
+        toast.error(err instanceof ApiError ? err.message : 'Usuario o contraseña incorrectos');
       }
-      mockLogin();
-      setIsLoading(false);
-    }
-  };
-
-  // Flujo de autenticación mock (fallback de desarrollo).
-  const mockLogin = () => {
-    {
-      // Regla de login: Correo y RUT sin dígito verificador.
-      const correoLower = username.toLowerCase().trim();
-      const passLimpia = password.replace(/\./g, '').trim(); // Contraseña ingresada (se quitan puntos)
-
-      // 1. Validar si es Supervisor
-      const supervisor = mockSupervisores.find(s => s.correo_usuario.toLowerCase() === correoLower);
-      if (supervisor) {
-        const rutSinDv = supervisor.rut.split('-')[0].replace(/\./g, '');
-        if (rutSinDv === passLimpia || password === 'admin') {
-          sessionStorage.setItem('userRole', 'supervisor');
-          sessionStorage.setItem('supervisorId', supervisor.id_supervisor.toString());
-          sessionStorage.setItem('supervisorNombre', supervisor.nombre);
-          toast.success(`Bienvenido/a ${supervisor.nombre}`);
-          navigate('/supervisor/dashboard');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // 2. Validar si es Coordinador (Admin Académico)
-      const coordinador = mockCoordinadores.find(c => c.correo_usuario?.toLowerCase() === correoLower);
-      if (coordinador) {
-        const rutSinDv = coordinador.rut.split('-')[0].replace(/\./g, '');
-        if (rutSinDv === passLimpia || password === 'admin') {
-          sessionStorage.setItem('userRole', 'admin_academico');
-          sessionStorage.setItem('userName', coordinador.nombre);
-          if (coordinador.id_carrera) {
-            sessionStorage.setItem('coordinadorCarreraId', coordinador.id_carrera);
-          } else {
-            sessionStorage.removeItem('coordinadorCarreraId');
-          }
-          toast.success(`Bienvenido/a ${coordinador.nombre}`);
-          navigate('/academico/dashboard');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // 3. Validar si es Docente
-      const docente = mockDocentesAcademicos.find(d => d.correo.toLowerCase() === correoLower);
-      if (docente) {
-        const rutSinDv = docente.rut.replace(/\./g, ''); // en mockDocentesMaestros el rut viene sin DV
-        if (rutSinDv === passLimpia || password === 'docente123') {
-          sessionStorage.setItem('userRole', 'docente');
-          sessionStorage.setItem('docenteId', docente.id.toString());
-          sessionStorage.setItem('docenteNombre', docente.nombreCompleto);
-          sessionStorage.setItem('docenteRut', docente.rut);
-          sessionStorage.setItem('docente_check_mensajes', '1');
-          toast.success(`Bienvenido/a ${docente.nombreCompleto}`);
-          navigate('/docente/dashboard');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Backdoor temporal original para probar si no meten correos válidos
-      if (username === 'academico' && password === 'academico') {
-        sessionStorage.setItem('userRole', 'admin_academico');
-        sessionStorage.setItem('userName', 'Administrador Académico');
-        toast.success('Inicio de sesión exitoso');
-        navigate('/academico/dashboard');
-        setIsLoading(false);
-        return;
-      }
-
-      toast.error('Credenciales incorrectas o usuario no encontrado');
+    } finally {
       setIsLoading(false);
     }
   };

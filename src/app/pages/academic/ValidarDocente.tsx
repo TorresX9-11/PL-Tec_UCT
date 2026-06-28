@@ -1,38 +1,22 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
-import { ArrowLeft, FileCheck, Save, BookOpen, User } from 'lucide-react';
-import {
-  mockDocentesAcademicos,
-  mockSeccionesAsignaturas,
-  mockAsignaturas,
-  type EstadoValidacion
-} from '../../data/mockData';
+import { ArrowLeft, FileCheck, Save, BookOpen, User, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
+import {
+  getDocentesPorCarrera,
+  getGruposPorCarrera,
+  validarDocente,
+  validarGrupo,
+  type DocenteAcademico,
+  type GrupoAcademico
+} from '../../data/academico';
 
-// ─── Definiciones de docs por contexto ───────────────────────────────────────
-type DocPersonalKey = 'cvActualizado' | 'certificadoTitulo' | 'certificadoAntecedentes' | 'certificadoInhabilidad' | 'carnetIdentidad';
+type EstadoValidacion = 'Validado' | 'Por Revisar' | 'Inexistente';
 
-interface DocItem {
-  key: string;
-  nombre: string;
-  archivo: string;
-  estado: EstadoValidacion;
-}
-
-const PERSONALES_DEF: { key: DocPersonalKey; nombre: string; archivo: string }[] = [
-  { key: 'cvActualizado', nombre: 'CV Actualizado', archivo: 'cv_actualizado.pdf' },
-  { key: 'certificadoTitulo', nombre: 'Certificado de Título', archivo: 'certificado_titulo.pdf' },
-  { key: 'certificadoAntecedentes', nombre: 'Certificado de Antecedentes', archivo: 'certificado_antecedentes.pdf' },
-  { key: 'certificadoInhabilidad', nombre: 'Certificado de Inhabilidad', archivo: 'certificado_inhabilidad.pdf' },
-  { key: 'carnetIdentidad', nombre: 'Carnet de Identidad', archivo: 'carnet_identidad.pdf' }
-];
-
-// ─── Helper: badge de estado ─────────────────────────────────────────────────
 function getEstadoBadge(estado: EstadoValidacion) {
   if (estado === 'Validado') return <Badge variant="default" className="bg-green-600">Validado</Badge>;
   if (estado === 'Por Revisar') return <Badge variant="outline" className="border-yellow-600 text-yellow-700">Por Revisar</Badge>;
@@ -40,63 +24,64 @@ function getEstadoBadge(estado: EstadoValidacion) {
 }
 
 export function ValidarDocente() {
-  const { docenteId } = useParams();
+  const { docenteId } = useParams(); // actually rut
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Modo de validación: ?tipo=personal | ?tipo=academico&seccion=X | (default: personal)
   const tipo = (searchParams.get('tipo') ?? 'personal') as 'personal' | 'academico';
-
-  // Modo supervisión: el supervisor solo puede visualizar, no modificar
   const isReadOnly = !!sessionStorage.getItem('modoSupervision');
   const seccionIdParam = searchParams.get('seccion');
   const seccionId = seccionIdParam ? Number(seccionIdParam) : null;
 
-  const docente = mockDocentesAcademicos.find(d => d.id === Number(docenteId ?? 0));
-
-  // Sección activa (solo si tipo=academico) — derivada de mockSeccionesAsignaturas
-  const seccion = useMemo(() => {
-    if (tipo !== 'academico' || seccionId === null) return null;
-    return mockSeccionesAsignaturas.find(s => s.id === seccionId) ?? null;
-  }, [tipo, seccionId]);
-
-  const asignatura = useMemo(() => {
-    if (!seccion) return null;
-    return mockAsignaturas.find(a => a.id === seccion.asignaturaId) ?? null;
-  }, [seccion]);
-
-  // Construye la lista de docs a editar según el modo
-  const docs: DocItem[] = useMemo(() => {
-    if (!docente) return [];
-    if (tipo === 'academico') {
-      if (!seccion) return [];
-      return [
-        { key: 'contenidoBlackboard', nombre: 'Contenido en Blackboard', archivo: 'contenido_blackboard.pdf', estado: seccion.contenidoBlackboard ?? 'Inexistente' },
-        // 'Notas al Día' no es un EstadoValidacion sino un X/Y → en el form usamos un estado derivado
-        { key: 'notasAlDia', nombre: 'Notas al Día', archivo: 'notas_curso.xlsx',
-          estado: ((seccion.notasTotales ?? 0) > 0 && (seccion.notasIngresadas ?? 0) >= (seccion.notasTotales ?? 0))
-            ? 'Validado'
-            : (seccion.notasIngresadas ?? 0) > 0 ? 'Por Revisar' : 'Inexistente' },
-        { key: 'guiaAprendizaje', nombre: 'Guía de Aprendizaje', archivo: 'guia_aprendizaje.pdf', estado: seccion.guiaAprendizaje ?? 'Inexistente' }
-      ];
-    }
-    // tipo=personal
-    return PERSONALES_DEF.map(d => ({
-      key: d.key,
-      nombre: d.nombre,
-      archivo: d.archivo,
-      estado: docente[d.key] as EstadoValidacion
-    }));
-  }, [docente, tipo, seccion]);
-
-  // Estado del form (keyed por doc.key)
+  const [docente, setDocente] = useState<DocenteAcademico | null>(null);
+  const [seccion, setSeccion] = useState<GrupoAcademico | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
   const [estados, setEstados] = useState<Record<string, EstadoValidacion>>({});
 
+  const carreraId = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId') || '';
+
   useEffect(() => {
-    const initial: Record<string, EstadoValidacion> = {};
-    docs.forEach(d => { initial[d.key] = d.estado; });
-    setEstados(initial);
-  }, [docs]);
+    async function load() {
+      if (!carreraId || !docenteId) return;
+      try {
+        const docs = await getDocentesPorCarrera(carreraId);
+        const doc = docs.find(d => d.rut_docente === Number(docenteId));
+        setDocente(doc || null);
+
+        if (tipo === 'academico' && seccionId) {
+          const grps = await getGruposPorCarrera(carreraId);
+          const grp = grps.find(g => g.id_grupo === seccionId);
+          setSeccion(grp || null);
+        }
+      } catch (err) {
+        toast.error('Error al cargar datos de validación.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [carreraId, docenteId, tipo, seccionId]);
+
+  useEffect(() => {
+    if (docente && tipo === 'personal') {
+      setEstados({
+        estado_cv: docente.estado_cv,
+        estado_titulo: docente.estado_titulo,
+        estado_antecedentes: docente.estado_antecedentes,
+        estado_inhabilidad: docente.estado_inhabilidad
+      });
+    } else if (seccion && tipo === 'academico') {
+      setEstados({
+        contenido_blackboard: seccion.contenido_blackboard,
+        guia_aprendizaje: seccion.guia_aprendizaje,
+        notas_estado: seccion.notas_estado
+      });
+    }
+  }, [docente, seccion, tipo]);
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>;
 
   if (!docente) {
     return (
@@ -125,90 +110,73 @@ export function ValidarDocente() {
     );
   }
 
-  const handleSave = () => {
-    // Persistir cambios en mockData (patrón mock)
-    if (tipo === 'personal') {
-      PERSONALES_DEF.forEach(d => {
-        if (estados[d.key]) (docente as any)[d.key] = estados[d.key];
-      });
-      toast.success('Documentos personales actualizados');
-    } else if (tipo === 'academico' && seccion) {
-      const idx = mockSeccionesAsignaturas.findIndex(s => s.id === seccion.id);
-      if (idx >= 0) {
-        mockSeccionesAsignaturas[idx] = {
-          ...mockSeccionesAsignaturas[idx],
-          contenidoBlackboard: estados['contenidoBlackboard'] ?? mockSeccionesAsignaturas[idx].contenidoBlackboard,
-          guiaAprendizaje: estados['guiaAprendizaje'] ?? mockSeccionesAsignaturas[idx].guiaAprendizaje
-          // notasAlDia es derivado de notasIngresadas/notasTotales → no se edita directo desde aquí
-        };
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (tipo === 'personal') {
+        await validarDocente(docente.rut_docente, estados);
+        toast.success('Documentos personales actualizados');
+      } else if (tipo === 'academico' && seccion) {
+        await validarGrupo(seccion.id_grupo, estados);
+        toast.success(`Archivos académicos actualizados`);
       }
-      toast.success(`Archivos académicos de ${asignatura?.sigla ?? 'la sección'} actualizados`);
+      navigate('/academico/gestion-academica');
+    } catch (err) {
+      toast.error('Error al guardar validación');
+    } finally {
+      setSaving(false);
     }
-    navigate('/academico/gestion-academica');
   };
 
   const validados = Object.values(estados).filter(e => e === 'Validado').length;
   const porRevisar = Object.values(estados).filter(e => e === 'Por Revisar').length;
 
-  // Título y descripción contextual
-  const tituloPagina = isReadOnly
-    ? (tipo === 'academico'
-        ? `Visualización Académica — ${asignatura?.sigla ?? ''}`
-        : 'Visualización de Archivos Personales')
-    : (tipo === 'academico'
-        ? `Validación Académica — ${asignatura?.sigla ?? ''}`
-        : 'Validación de Archivos Personales');
-  const descripcionPagina = tipo === 'academico' && asignatura && seccion
-    ? `${asignatura.nombre} · Sección ${seccion.seccion}`
-    : `${docente.nombreCompleto} · ${docente.rut}`;
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/academico/gestion-academica')}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            {tipo === 'academico' ? <BookOpen className="h-6 w-6 text-green-600" /> : <User className="h-6 w-6 text-blue-600" />}
-            <h1 className="text-3xl font-bold text-gray-900">{tituloPagina}</h1>
+      <div className="flex items-center justify-between border-b pb-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/academico/gestion-academica')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {tipo === 'academico' ? 'Validación Académica' : 'Validación de Documentos Personales'}
+            </h1>
+            <p className="mt-2 text-gray-600 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              {docente.nombre} • {docente.rut_docente}-{docente.dv}
+              {tipo === 'academico' && seccion && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <BookOpen className="h-4 w-4 text-blue-600" />
+                  Sección {seccion.seccion} ({seccion.nombre_curso})
+                </>
+              )}
+            </p>
           </div>
-          <p className="mt-1 text-gray-600">{descripcionPagina}</p>
-          {tipo === 'academico' && (
-            <p className="mt-1 text-sm text-gray-500">Docente: <strong>{docente.nombreCompleto}</strong> · {docente.rut}</p>
+        </div>
+        <div className="flex gap-2">
+          {!isReadOnly && (
+            <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white" disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
           )}
         </div>
-        {!isReadOnly && (
-          <Button onClick={handleSave} size="lg">
-            <Save className="mr-2 h-5 w-5" />
-            Guardar Cambios
-          </Button>
-        )}
       </div>
 
-      {/* Resumen */}
       <Card>
         <CardHeader>
           <CardTitle>Estado General</CardTitle>
-          <CardDescription>
-            {isReadOnly
-              ? 'Visualización del estado de validación (solo lectura)'
-              : (tipo === 'academico'
-                  ? 'Resumen de validación académica para este ramo'
-                  : 'Resumen de validación de documentos personales del docente')}
-          </CardDescription>
+          <CardDescription>Revise y cambie el estado de validación de cada documento</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-lg border p-4">
               <p className="text-sm text-gray-600">Total Documentos</p>
-              <p className="text-3xl font-bold">{docs.length}</p>
+              <p className="text-3xl font-bold">{Object.keys(estados).length}</p>
             </div>
             <div className="rounded-lg border p-4">
               <p className="text-sm text-gray-600">Validados</p>
@@ -222,81 +190,211 @@ export function ValidarDocente() {
         </CardContent>
       </Card>
 
-      {/* Validación de Documentos */}
       <Card>
         <CardHeader>
           <CardTitle>
             {tipo === 'academico' ? 'Archivos Académicos del Ramo' : 'Documentos Personales del Docente'}
           </CardTitle>
-          <CardDescription>
-            Revise y cambie el estado de validación de cada documento
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {docs.map((doc) => {
-            const isNotasAlDia = doc.key === 'notasAlDia';
-            return (
-              <div key={doc.key} className="rounded-lg border p-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                    <FileCheck className="h-6 w-6 text-blue-600" />
+          {tipo === 'personal' && (
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-blue-600" />
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium">{doc.nombre}</h4>
-                    <p className="text-sm text-gray-600">{doc.archivo}</p>
-                    {isNotasAlDia && seccion && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Progreso: {seccion.notasIngresadas ?? 0} de {seccion.notasTotales ?? 0} notas ingresadas
-                      </p>
-                    )}
-                    <div className="mt-3 grid gap-4 md:grid-cols-2">
-                      <div>
-                        <Label htmlFor={`estado-${doc.key}`}>Estado de Validación</Label>
-                        <Select
-                          value={estados[doc.key] ?? doc.estado}
-                          onValueChange={(value: string) => setEstados((prev: Record<string, EstadoValidacion>) => ({ ...prev, [doc.key]: value as EstadoValidacion }))}
-                          disabled={isNotasAlDia || isReadOnly}
-                        >
-                          <SelectTrigger id={`estado-${doc.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Inexistente">Inexistente</SelectItem>
-                            <SelectItem value="Por Revisar">Por Revisar</SelectItem>
-                            <SelectItem value="Validado">Validado</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {isNotasAlDia && (
-                          <p className="mt-1 text-xs italic text-gray-500">
-                            Las notas se actualizan desde la plataforma; este estado es derivado.
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-end">
-                        {getEstadoBadge(estados[doc.key] ?? doc.estado)}
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <Button variant="outline" size="sm">Ver Documento</Button>
-                    </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Curriculum Vitae</h4>
+                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_cv.pdf`, '_blank')}>Ver PDF</Button>
                   </div>
                 </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['estado_cv'])}
+                  {!isReadOnly && (
+                    <Select value={estados['estado_cv']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_cv: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </div>
-            );
-          })}
+              
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Certificado de Título</h4>
+                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_titulo.pdf`, '_blank')}>Ver PDF</Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['estado_titulo'])}
+                  {!isReadOnly && (
+                    <Select value={estados['estado_titulo']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_titulo: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Certificado de Antecedentes</h4>
+                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_antecedentes.pdf`, '_blank')}>Ver PDF</Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['estado_antecedentes'])}
+                  {!isReadOnly && (
+                    <Select value={estados['estado_antecedentes']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_antecedentes: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Certificado de Inhabilidades</h4>
+                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_inhabilidades.pdf`, '_blank')}>Ver PDF</Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['estado_inhabilidad'])}
+                  {!isReadOnly && (
+                    <Select value={estados['estado_inhabilidad']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_inhabilidad: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tipo === 'academico' && seccion && (
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <BookOpen className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Contenido en Blackboard</h4>
+                    <p className="text-sm text-gray-500">Subido por el docente a la plataforma.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['contenido_blackboard'])}
+                  {!isReadOnly && (
+                    <Select value={estados['contenido_blackboard']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, contenido_blackboard: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Guía de Aprendizaje</h4>
+                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/grupo_${seccion.id_grupo}_guia.pdf`, '_blank')}>Ver PDF</Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['guia_aprendizaje'])}
+                  {!isReadOnly && (
+                    <Select value={estados['guia_aprendizaje']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, guia_aprendizaje: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">Notas al Día</h4>
+                    <p className="text-sm text-gray-500">Validación manual de notas</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {getEstadoBadge(estados['notas_estado'])}
+                  {!isReadOnly && (
+                    <Select value={estados['notas_estado']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, notas_estado: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inexistente">Inexistente</SelectItem>
+                        <SelectItem value="Por Revisar">Por Revisar</SelectItem>
+                        <SelectItem value="Validado">Validado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Botones de Acción */}
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => navigate('/academico/gestion-academica')}>
-          Cancelar
-        </Button>
-        <Button onClick={handleSave}>
-          <Save className="mr-2 h-4 w-4" />
-          Guardar Cambios
-        </Button>
-      </div>
     </div>
   );
 }

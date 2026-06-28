@@ -189,7 +189,9 @@ export function BandejaBoletas() {
           c.docente.rut.includes(term);
         const estadoBoleta = c.cuota.boletaEstado ?? 'Inexistente';
         const matchBoleta =
-          estadoBoletaFiltro === 'todos' || estadoBoleta === estadoBoletaFiltro;
+          estadoBoletaFiltro === 'todos' || 
+          estadoBoleta === estadoBoletaFiltro ||
+          (estadoBoletaFiltro === 'Inexistente' && estadoBoleta === 'Faltante');
         const matchPago =
           estadoPagoFiltro === 'todos' || c.cuota.estadoPago === estadoPagoFiltro;
         return matchSearch && matchBoleta && matchPago;

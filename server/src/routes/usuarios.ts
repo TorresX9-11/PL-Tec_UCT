@@ -19,8 +19,8 @@ const router = Router();
 
 router.get('/', asyncHandler(usuarios.list));
 router.get('/:id', asyncHandler(usuarios.getOne));
-router.post('/', requireAuth, requireLevel('admin'), asyncHandler(usuarios.create));
-router.put('/:id', requireAuth, requireLevel('admin'), asyncHandler(usuarios.update));
-router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(usuarios.remove));
+router.post('/', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.create));
+router.put('/:id', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.update));
+router.delete('/:id', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.remove));
 
 export default router;

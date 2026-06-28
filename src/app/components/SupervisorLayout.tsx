@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { Eye, LogOut, LayoutDashboard, Users } from 'lucide-react';
+import { Eye, LogOut, LayoutDashboard, Users, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function SupervisorLayout() {
@@ -75,6 +75,17 @@ export function SupervisorLayout() {
             >
               <Users className="h-4 w-4" />
               Gestión de Coordinadores
+            </Link>
+            <Link
+              to="/supervisor/usuarios"
+              className={`flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                isActive('/supervisor/usuarios')
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <UserCog className="h-4 w-4" />
+              Cuentas de Usuarios
             </Link>
           </div>
         </div>

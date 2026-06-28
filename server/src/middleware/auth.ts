@@ -11,6 +11,8 @@ export type UserLevel = 'docente' | 'coordinador' | 'academico' | 'supervisor' |
 export interface AuthPayload {
   correo: string;
   nivel: UserLevel;
+  id_carrera?: string;
+  rut_docente?: number;
 }
 
 declare global {
