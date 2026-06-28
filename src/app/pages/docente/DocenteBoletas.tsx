@@ -21,11 +21,6 @@ import {
   mockDocentesAcademicos,
   type Boleta
 } from '../../data/mockData';
-import {
-  loadMensajes,
-  subscribeMensajes,
-  type MensajesPorCuota
-} from '../../data/mensajesAdmin';
 import { useLocation } from 'react-router';
 
 const MESES = [
@@ -53,20 +48,29 @@ export function DocenteBoletas() {
   const cuotasPendientes = useMemo(() => getBoletasPendientes(docenteId), [docenteId, version]);
   const cuotasDelDocente = useMemo(() => getCuotasDocente(docenteId), [docenteId, version]);
 
-  // Notas del administrador (solo lectura, keyed por cuotaId) — centralizado en mensajesAdmin.ts
-  const [notasAdmin, setNotasAdmin] = useState<MensajesPorCuota>(() => loadMensajes(docenteId));
+  // Notas del administrador
+  const [pagosBackend, setPagosBackend] = useState<any[]>([]);
 
   useEffect(() => {
-    setNotasAdmin(loadMensajes(docenteId));
-    return subscribeMensajes(docenteId, setNotasAdmin);
-  }, [docenteId]);
-
-  // Refresco en vivo cuando el admin de pagos cambia el estado de una boleta
-  // o registra/revierte el pago de una cuota.
-  useEffect(() => {
-    window.addEventListener('pagos:update', bump);
-    return () => window.removeEventListener('pagos:update', bump);
+    const fetchPagos = () => {
+      listPagos().then(res => setPagosBackend(res.data)).catch(console.error);
+      bump();
+    };
+    fetchPagos();
+    window.addEventListener('pagos:update', fetchPagos);
+    return () => window.removeEventListener('pagos:update', fetchPagos);
   }, []);
+
+  const notasAdmin = useMemo(() => {
+    const obj: Record<number, string> = {};
+    pagosBackend.forEach(p => {
+      if (p.notas) {
+        // En un escenario real, p.id coincide con cuota.id
+        obj[p.id] = p.notas;
+      }
+    });
+    return obj;
+  }, [pagosBackend]);
 
   // Deep-link via hash: cuando se llega con #cuota-{id} (p.ej. desde el toast de
   // notificación del DocenteLayout), scrollear al elemento y aplicar un highlight

@@ -2,8 +2,7 @@ import { useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { User, LogOut, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { loadMensajes } from '../data/mensajesAdmin';
-import { getCuotasDocente } from '../data/mockData';
+import { listPagos } from '../data/pagos';
 
 export function DocenteLayout() {
   const location = useLocation();
@@ -34,39 +33,45 @@ export function DocenteLayout() {
     if (!docenteIdRaw) return;
     const docenteId = Number(docenteIdRaw);
 
-    const mensajes = loadMensajes(docenteId);
-    const cuotaIds = Object.keys(mensajes).map(Number);
-    if (cuotaIds.length === 0) return;
+    const fetchNotas = async () => {
+      try {
+        const { data: pagosBackend } = await listPagos();
+        // Filtrar pagos que tengan notas y correspondan a este docente
+        // (Asumimos que si estamos logueados como docente, solo veremos nuestros pagos o podemos cruzar info si es necesario, 
+        //  pero para mostrar el toast usamos los datos que devuelve la API)
+        const cuotasConMensaje = pagosBackend.filter(p => p.notas);
+        
+        if (cuotasConMensaje.length === 0) return;
+        const primera = cuotasConMensaje[0];
+        const total = cuotasConMensaje.length;
 
-    // Resolver mes/numero de cuota del primer mensaje (para la primera CTA)
-    const cuotas = getCuotasDocente(docenteId);
-    const cuotasConMensaje = cuotas.filter(c => mensajes[c.id]);
-    if (cuotasConMensaje.length === 0) return;
+        // Pequeño delay para que aparezca cuando ya está renderizada la dashboard
+        const timer = window.setTimeout(() => {
+          const titulo = total === 1
+            ? 'Tienes un mensaje del Administrador de Pagos'
+            : `Tienes ${total} mensajes del Administrador de Pagos`;
+          const descripcion = total === 1
+            ? `Ha dejado una observación en tu boleta de ${primera.mes}.`
+            : `Hay observaciones pendientes (la más reciente en ${primera.mes}).`;
 
-    const primera = cuotasConMensaje[0];
-    const total = cuotasConMensaje.length;
+          toast.message(titulo, {
+            description: descripcion,
+            icon: <MessageSquare className="h-5 w-5 text-blue-600" />,
+            duration: 8000,
+            action: {
+              label: 'Ver mensaje',
+              onClick: () => navigate(`/docente/boletas#cuota-${primera.id}`)
+            }
+          });
+        }, 600);
 
-    // Pequeño delay para que aparezca cuando ya está renderizada la dashboard
-    const timer = window.setTimeout(() => {
-      const titulo = total === 1
-        ? 'Tienes un mensaje del Administrador de Pagos'
-        : `Tienes ${total} mensajes del Administrador de Pagos`;
-      const descripcion = total === 1
-        ? `Ha dejado una observación en tu boleta de ${primera.mes}.`
-        : `Hay observaciones pendientes (la más reciente en ${primera.mes}).`;
+      } catch (err) {
+        console.error('Error fetching notas', err);
+      }
+    };
+    
+    fetchNotas();
 
-      toast.message(titulo, {
-        description: descripcion,
-        icon: <MessageSquare className="h-5 w-5 text-blue-600" />,
-        duration: 8000,
-        action: {
-          label: 'Ver mensaje',
-          onClick: () => navigate(`/docente/boletas#cuota-${primera.id}`)
-        }
-      });
-    }, 600);
-
-    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

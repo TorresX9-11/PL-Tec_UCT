@@ -12,18 +12,18 @@ import {
   Inbox
 } from 'lucide-react';
 import {
-  mockDocentesMaestros,
   type CuotaConContexto,
   type Boleta,
   type CuotaMensual
 } from '../../data/mockData';
 import { listPagos, updatePago } from '../../data/pagos';
 import { listPropuestas } from '../../data/propuestas';
+import { listDocentes } from '../../data/docentes';
 import {
-  loadMensajes,
-  setMensajeCuota,
-  subscribeMensajes
-} from '../../data/mensajesAdmin';
+  DialogVerPdf,
+  DialogRevisarBoleta,
+  DialogNotaBoleta,
+} from '../../components/shared/AdminBoletaDialogs';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
@@ -92,16 +92,19 @@ export function BandejaBoletas() {
   const [version, setVersion] = useState(0);
   const [cuotasBackend, setCuotasBackend] = useState<CuotaMensual[]>([]);
   const [propuestasBackend, setPropuestasBackend] = useState<any[]>([]);
+  const [docentesBackend, setDocentesBackend] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [pagosRes, propRes] = await Promise.all([
+      const [pagosRes, propRes, docRes] = await Promise.all([
         listPagos(),
-        listPropuestas()
+        listPropuestas(),
+        listDocentes()
       ]);
       setCuotasBackend(pagosRes.data);
       setPropuestasBackend(propRes.data);
+      setDocentesBackend(docRes.data);
     } catch (e) {
       console.error(e);
       toast.error('Error al cargar pagos');
@@ -131,7 +134,7 @@ export function BandejaBoletas() {
     return cuotasBackend.map(pago => {
       const propuesta = propuestasBackend.find(p => p.id === pago.propuestaId);
       const docenteId = propuesta?.docenteId ?? 0;
-      const docente = mockDocentesMaestros.find(d => d.id === docenteId) ?? {
+      const docente = docentesBackend.find(d => d.id === docenteId) ?? {
         id: 0,
         rut: '0-0',
         dv: '0',
@@ -154,10 +157,14 @@ export function BandejaBoletas() {
         observaciones: pago.notas ?? undefined
       } : undefined;
 
+      // Calculate actual cuota number based on index for this proposal
+      const cuotasPropuesta = cuotasBackend.filter(c => c.propuestaId === pago.propuestaId);
+      const cuotaIndex = cuotasPropuesta.findIndex(c => c.id === pago.id);
+
       // Ensure that CuotaMensual has all necessary properties
       const enrichedCuota: CuotaMensual = {
         ...pago,
-        numeroCuota: 1, // Mock
+        numeroCuota: cuotaIndex >= 0 ? cuotaIndex + 1 : 1,
         montoBruto: propuesta ? Math.round(propuesta.montoTotalPropuesta / propuesta.numeroCuotas) : 0,
         docenteId,
         valorCuotaBruto: propuesta ? Math.round(propuesta.montoTotalPropuesta / propuesta.numeroCuotas) : 0,
@@ -169,7 +176,7 @@ export function BandejaBoletas() {
         boleta
       };
     });
-  }, [cuotasBackend, propuestasBackend]);
+  }, [cuotasBackend, propuestasBackend, docentesBackend]);
 
   // Filtros combinados (AND).
   const filtradas = useMemo(() => {
@@ -353,17 +360,21 @@ export function BandejaBoletas() {
       {/* Diálogos */}
       <DialogVerPdf
         open={dialog?.tipo === 'pdf'}
-        ctx={dialog?.tipo === 'pdf' ? dialog.ctx : null}
+        cuota={dialog?.tipo === 'pdf' && dialog.ctx ? dialog.ctx.cuota : null}
+        docenteNombre={dialog?.tipo === 'pdf' && dialog.ctx ? dialog.ctx.docente.nombreCompleto : ''}
+        boletaPreview={dialog?.tipo === 'pdf' && dialog.ctx?.boleta ? { nombre: dialog.ctx.boleta.nombre, fecha: dialog.ctx.boleta.fecha } : undefined}
+        observaciones={dialog?.tipo === 'pdf' && dialog.ctx?.boleta?.observaciones ? dialog.ctx.boleta.observaciones : undefined}
         onClose={() => setDialog(null)}
       />
       <DialogRevisarBoleta
         open={dialog?.tipo === 'revisar'}
-        ctx={dialog?.tipo === 'revisar' ? dialog.ctx : null}
+        cuota={dialog?.tipo === 'revisar' && dialog.ctx ? dialog.ctx.cuota : null}
+        docenteNombre={dialog?.tipo === 'revisar' && dialog.ctx ? dialog.ctx.docente.nombreCompleto : ''}
         onClose={() => setDialog(null)}
       />
-      <DialogNota
+      <DialogNotaBoleta
         open={dialog?.tipo === 'nota'}
-        ctx={dialog?.tipo === 'nota' ? dialog.ctx : null}
+        cuota={dialog?.tipo === 'nota' && dialog.ctx ? dialog.ctx.cuota : null}
         onClose={() => setDialog(null)}
       />
     </div>
@@ -467,14 +478,7 @@ function FilaCuota({
   const estadoBoleta = cuota.boletaEstado ?? 'Inexistente';
   const tieneBoleta = !!boleta;
 
-  const [tieneMensaje, setTieneMensaje] = useState(() => {
-    const msg = loadMensajes(docente.id);
-    return Boolean(msg[cuota.id]);
-  });
-
-  useEffect(() => {
-    return subscribeMensajes(docente.id, (m) => setTieneMensaje(Boolean(m[cuota.id])));
-  }, [docente.id, cuota.id]);
+  const tieneMensaje = Boolean(cuota.notas);
 
   // Workflow de pago simplificado: toggle Pagado / Sin pago con confirmación.
   const [confirmPagoOpen, setConfirmPagoOpen] = useState(false);
@@ -554,6 +558,7 @@ function FilaCuota({
             variant="ghost"
             size="sm"
             title={tieneMensaje ? 'Editar nota' : 'Dejar nota al docente'}
+            disabled={!tieneBoleta}
             onClick={() => onAccion({ tipo: 'nota', ctx: row })}
           >
             <MessageSquare className={`h-4 w-4 ${tieneMensaje ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -601,222 +606,4 @@ function FilaCuota({
   );
 }
 
-// ============================================================================
-//   Diálogo: Ver PDF
-// ============================================================================
 
-function DialogVerPdf({
-  open,
-  ctx,
-  onClose
-}: {
-  open: boolean;
-  ctx: CuotaConContexto | null;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Boleta de honorarios</DialogTitle>
-          <DialogDescription>
-            {ctx && (
-              <>
-                {ctx.docente.nombreCompleto} · {ctx.cuota.mes} · {fmtCLP(ctx.cuota.montoBruto)}
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        {ctx?.boleta && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border bg-gray-50 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                <FileText className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <div className="font-medium">{ctx.boleta.nombre}</div>
-                <div className="text-xs text-gray-500">
-                  Subida el {ctx.boleta.fecha}
-                </div>
-              </div>
-              <Button variant="outline" size="sm" disabled title="Descarga simulada (mock)">
-                <Download className="mr-1 h-4 w-4" />
-                Descargar
-              </Button>
-            </div>
-            <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-              <div className="text-center">
-                <FileText className="mx-auto mb-2 h-12 w-12 text-gray-400" />
-                <p>Preview del PDF</p>
-                <p className="mt-1 text-xs italic">
-                  (Mock — cuando exista backend, aquí va el visor del documento real)
-                </p>
-              </div>
-            </div>
-            {ctx.boleta.observaciones && (
-              <div className="rounded border border-orange-200 bg-orange-50 p-3 text-sm">
-                <div className="font-semibold text-orange-900">Observación previa</div>
-                <p className="mt-1 text-orange-800">{ctx.boleta.observaciones}</p>
-              </div>
-            )}
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================================
-//   Diálogo: Revisar boleta (cambiar estado + observación)
-// ============================================================================
-
-function DialogRevisarBoleta({
-  open,
-  ctx,
-  onClose
-}: {
-  open: boolean;
-  ctx: CuotaConContexto | null;
-  onClose: () => void;
-}) {
-  const [estado, setEstado] = useState<NonNullable<Boleta['estado']>>('Procesada');
-  const [observ, setObserv] = useState('');
-
-  useEffect(() => {
-    if (open && ctx?.boleta) {
-      setEstado(ctx.boleta.estado ?? 'Subida');
-      setObserv(ctx.boleta.observaciones ?? '');
-    }
-  }, [open, ctx]);
-
-  if (!ctx?.boleta) return null;
-
-  const guardar = async () => {
-    if (estado === 'Con Observación' && !observ.trim()) {
-      toast.error('Debe ingresar la observación para el docente.');
-      return;
-    }
-    try {
-      await updatePago(ctx.cuota.id, {
-        boletaEstado: estado,
-        notas: estado === 'Con Observación' ? observ.trim() : undefined
-      });
-      toast.success(`Boleta marcada como "${estado}"`);
-      window.dispatchEvent(new Event('pagos:update'));
-      onClose();
-    } catch(e) {
-      toast.error('Error al actualizar la boleta');
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Revisar boleta</DialogTitle>
-          <DialogDescription>
-            {ctx.docente.nombreCompleto} · {ctx.cuota.mes}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Estado de la boleta</Label>
-            <Select value={estado} onValueChange={(v) => setEstado(v as NonNullable<Boleta['estado']>)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Subida">Subida (sin revisar)</SelectItem>
-                <SelectItem value="Procesada">Procesada (aprobada)</SelectItem>
-                <SelectItem value="Con Observación">Con Observación</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="mt-1 text-xs text-gray-500">
-              "Procesada" significa que la boleta está aprobada y se puede proceder al pago.
-              "Con Observación" notifica al docente que debe corregir o reemplazar el documento.
-            </p>
-          </div>
-          {estado === 'Con Observación' && (
-            <div>
-              <Label>Observación para el docente</Label>
-              <Textarea
-                rows={4}
-                value={observ}
-                onChange={(e) => setObserv(e.target.value)}
-                placeholder="Describa qué debe corregir el docente..."
-              />
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar}>Guardar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================================
-//   Diálogo: Nota al docente (reutiliza mensajesAdmin)
-// ============================================================================
-
-function DialogNota({
-  open,
-  ctx,
-  onClose
-}: {
-  open: boolean;
-  ctx: CuotaConContexto | null;
-  onClose: () => void;
-}) {
-  const [texto, setTexto] = useState('');
-
-  useEffect(() => {
-    if (open && ctx) {
-      const mensajes = loadMensajes(ctx.docente.id);
-      setTexto(mensajes[ctx.cuota.id] ?? '');
-    }
-  }, [open, ctx]);
-
-  // Suscribirse para que el textarea refleje cambios externos mientras está abierto.
-  useEffect(() => {
-    if (!open || !ctx) return;
-    return subscribeMensajes(ctx.docente.id, (m) => setTexto(m[ctx.cuota.id] ?? ''));
-  }, [open, ctx]);
-
-  if (!ctx) return null;
-
-  const guardar = () => {
-    setMensajeCuota(ctx.docente.id, ctx.cuota.id, texto);
-    toast.success('Nota guardada y sincronizada al docente.');
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Nota · {ctx.cuota.mes}</DialogTitle>
-          <DialogDescription>
-            El docente verá esta nota junto a la boleta de este mes y recibirá un
-            toast al iniciar sesión.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          rows={5}
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          placeholder="Escriba una observación o recordatorio..."
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={guardar}>Guardar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}

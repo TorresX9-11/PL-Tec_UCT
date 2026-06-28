@@ -1,6 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Download, FileText, Calendar } from 'lucide-react';
-import { mockDocentesMaestros, mockCarreras, mockAsignaturas, mockSeccionesAsignaturas, mockPropuestasSemestrales } from '../../data/mockData';
+import { listDocentes } from '../../data/docentes';
+import { listPropuestas } from '../../data/propuestas';
+import { listPagos } from '../../data/pagos';
+import { listGrupos } from '../../data/grupos';
+import { listCursos } from '../../data/cursos';
+import { listCarreras } from '../../data/carreras';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -13,36 +18,84 @@ export function Reportes() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [filtroJornada, setFiltroJornada] = useState<string>('todos');
 
+  const [docentesBackend, setDocentesBackend] = useState<any[]>([]);
+  const [propuestasBackend, setPropuestasBackend] = useState<any[]>([]);
+  const [pagosBackend, setPagosBackend] = useState<any[]>([]);
+  const [gruposBackend, setGruposBackend] = useState<any[]>([]);
+  const [cursosBackend, setCursosBackend] = useState<any[]>([]);
+  const [carrerasBackend, setCarrerasBackend] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [docRes, propRes, pagosRes, grupRes, curRes, carRes] = await Promise.all([
+          listDocentes(),
+          listPropuestas(),
+          listPagos(),
+          listGrupos(),
+          listCursos(),
+          listCarreras()
+        ]);
+        setDocentesBackend(docRes.data);
+        setPropuestasBackend(propRes.data);
+        setPagosBackend(pagosRes.data);
+        setGruposBackend(grupRes.data);
+        setCursosBackend(curRes.data);
+        setCarrerasBackend(carRes.data);
+      } catch (e) {
+        console.error(e);
+        toast.error('Error al cargar datos del reporte');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   // Construir la vista de docentes con propuesta (similar al dashboard)
   const docentesParaReporte = useMemo(() => {
-    return mockDocentesMaestros.map(docente => {
-      // Buscar propuesta del semestre activo
-      const propuesta = mockPropuestasSemestrales.find(p => p.docenteId === docente.id && p.semestre === 1 && p.año === 2026);
+    return docentesBackend.map(docente => {
+      // Buscar propuesta (simplificado a la primera propuesta que tenga el docente, o la del semestre activo si hubiera data completa)
+      const propuesta = propuestasBackend.find(p => p.docenteId === docente.id);
       
-      // Si no tiene propuesta, su estado de pago es 'Sin propuesta' o se omite
-      const estadoPago = propuesta ? propuesta.estadoPago : 'Sin propuesta';
-      const jornada = propuesta ? (propuesta.numeroCuotas === 5 ? 'Vespertina' : 'Diurna') : 'Sin Asignar';
+      let estadoPagoGlobal = 'Sin propuesta';
+      let jornada = 'Sin Asignar';
+
+      if (propuesta) {
+        jornada = propuesta.numeroCuotas === 5 ? 'Vespertina' : 'Diurna';
+        const cuotasDocente = pagosBackend.filter(p => p.propuestaId === propuesta.id);
+        const cuotasPagadas = cuotasDocente.filter(c => c.estadoPago === 'Pagada').length;
+        
+        if (cuotasPagadas > 0) {
+          if (cuotasPagadas === propuesta.numeroCuotas && propuesta.numeroCuotas > 0) {
+            estadoPagoGlobal = 'Pagado';
+          } else {
+            estadoPagoGlobal = 'En proceso';
+          }
+        } else {
+          estadoPagoGlobal = 'Pendiente';
+        }
+      }
       
-      // Buscar las carreras asociadas a las secciones de este docente
-      const secciones = mockSeccionesAsignaturas.filter(s => s.docenteId === docente.id);
-      const carrerasIds = new Set(secciones.map(s => {
-        const asig = mockAsignaturas.find(a => a.id === s.asignaturaId);
-        return asig ? asig.carreraId : null;
+      // Buscar las asignaturas asociadas a las secciones de este docente
+      const secciones = gruposBackend.filter(s => s.docenteId === docente.id);
+      const asignaturasNombres = new Set(secciones.map(s => {
+        const asig = cursosBackend.find(a => a.id === s.asignaturaId);
+        return asig ? asig.nombre : null;
       }).filter(Boolean));
       
-      const carrerasNombres = Array.from(carrerasIds)
-        .map(id => mockCarreras.find(c => c.id === id)?.nombre)
-        .filter(Boolean)
-        .join(', ');
+      const asignaturaText = Array.from(asignaturasNombres).join(', ') || 'Sin asignatura';
 
       return {
         ...docente,
-        carrera: carrerasNombres || 'Sin carrera',
+        nombreCompleto: docente.nombre || docente.nombreCompleto,
+        asignatura: asignaturaText,
         jornada,
-        estado: estadoPago
+        estado: estadoPagoGlobal
       };
     }).filter(d => d.estado !== 'Sin propuesta'); // Solo incluir los que tienen propuesta (pago activo)
-  }, []);
+  }, [docentesBackend, propuestasBackend, pagosBackend, gruposBackend, cursosBackend, carrerasBackend]);
 
   const docentesFiltrados = docentesParaReporte.filter((d: any) => {
     const cumpleEstado = filtroEstado === 'todos' || d.estado === filtroEstado;
@@ -63,7 +116,7 @@ export function Reportes() {
 
     // Preparar datos para la tabla
     const tableData = docentesFiltrados.map((docente: any) => [
-      docente.carrera,
+      docente.asignatura,
       docente.jornada,
       docente.rut,
       docente.nombreCompleto,
@@ -72,7 +125,7 @@ export function Reportes() {
 
     // Generar tabla
     autoTable(doc, {
-      head: [['Carrera', 'Jornada', 'RUT', 'Nombre', 'Estado']],
+      head: [['Asignaturas', 'Jornada', 'RUT', 'Nombre', 'Estado']],
       body: tableData,
       startY: 40,
       styles: { fontSize: 9 },
@@ -85,6 +138,10 @@ export function Reportes() {
     doc.save(`reporte-docentes-${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success('Reporte PDF generado exitosamente');
   };
+
+  if (isLoading) {
+    return <div className="flex h-full items-center justify-center p-8"><p className="text-gray-500">Cargando datos del reporte...</p></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -169,8 +226,8 @@ export function Reportes() {
                 <span className="text-sm font-bold text-blue-600">1</span>
               </div>
               <div>
-                <p className="font-medium">Carrera</p>
-                <p className="text-sm text-gray-600">Carrera asignada al docente</p>
+                <p className="font-medium">Asignatura</p>
+                <p className="text-sm text-gray-600">Asignatura(s) impartidas por el docente</p>
               </div>
             </div>
 

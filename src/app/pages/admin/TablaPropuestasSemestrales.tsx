@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, MessageSquare, Download } from 'lucide-react';
+import { Search, Eye, FileText, DollarSign, AlertCircle, CheckCircle, Pencil, MessageSquare, Download, ClipboardCheck } from 'lucide-react';
 import {
   mockPropuestasSemestrales,
   mockDocentesMaestros,
@@ -8,11 +8,10 @@ import {
   type CuotaMensual
 } from '../../data/mockData';
 import {
-  loadMensajes,
-  setMensajeCuota,
-  subscribeMensajes,
-  type MensajesPorCuota
-} from '../../data/mensajesAdmin';
+  DialogVerPdf,
+  DialogRevisarBoleta,
+  DialogNotaBoleta,
+} from '../../components/shared/AdminBoletaDialogs';
 import { listPropuestas, updatePropuesta, createPropuesta } from '../../data/propuestas';
 import { listPagos } from '../../data/pagos';
 import { listGrupos } from '../../data/grupos';
@@ -708,33 +707,14 @@ function DetallePropuesta({ propuesta, secciones, docentesBackend, cursosBackend
     [pagosBackend, propuesta.id, propuesta.valorCuotaBruto]
   );
 
-  // --- Cambio 3: Mensajes/notas por cuota (centralizado en mensajesAdmin.ts) ---
-  const [mensajes, setMensajes] = useState<MensajesPorCuota>(() => loadMensajes(propuesta.docenteId));
+  // --- Cambio 3: Modales de boletas y notas conectados al backend ---
+  const [dialog, setDialog] = useState<{ tipo: 'pdf' | 'revisar' | 'nota'; cuota: CuotaMensual } | null>(null);
 
-  useEffect(() => {
-    setMensajes(loadMensajes(propuesta.docenteId));
-    return subscribeMensajes(propuesta.docenteId, setMensajes);
-  }, [propuesta.docenteId]);
-
-  const [mensajeOpen, setMensajeOpen] = useState(false);
-  const [mensajeCuota, setMensajeCuotaState] = useState<CuotaMensual | null>(null);
-  const [mensajeInput, setMensajeInput] = useState('');
-
-  const abrirMensaje = (cuota: CuotaMensual) => {
-    setMensajeCuotaState(cuota);
-    setMensajeInput(mensajes[cuota.id] ?? '');
-    setMensajeOpen(true);
-  };
-
-  const guardarMensaje = () => {
-    if (!mensajeCuota) return;
-    const next = setMensajeCuota(propuesta.docenteId, mensajeCuota.id, mensajeInput);
-    setMensajes(next);
-    toast.success('Nota guardada y sincronizada al docente');
-    setMensajeOpen(false);
-    setMensajeCuotaState(null);
-    setMensajeInput('');
-  };
+  // Escuchar actualización de pagos (desde Modales o Bandeja) para forzar un re-render
+  // Nota: si pagosBackend se pasa por props y se refetching a nivel de la tabla padre,
+  // el padre lo manejará. Pero es útil tener el listener acá si es necesario.
+  // Sin embargo, TablaPropuestasSemestrales ya hace refetch al inicio,
+  // vamos a confiar en que la ventana se actualice si actualizamos `pagosBackend` global.
 
   return (
     <div className="space-y-6">
@@ -875,8 +855,9 @@ function DetallePropuesta({ propuesta, secciones, docentesBackend, cursosBackend
             </TableHeader>
             <TableBody>
               {cuotasDocente.map((cuota) => {
-                const tieneMensaje = Boolean(mensajes[cuota.id]);
+                const tieneMensaje = Boolean(cuota.notas);
                 const boletaEstado = cuota.boletaEstado ?? 'Inexistente';
+                const tieneBoleta = boletaEstado !== 'Inexistente' && boletaEstado !== 'Faltante';
                 return (
                   <TableRow key={cuota.id}>
                     <TableCell className="font-medium">{cuota.numeroCuota}</TableCell>
@@ -904,19 +885,40 @@ function DetallePropuesta({ propuesta, secciones, docentesBackend, cursosBackend
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title={tieneMensaje ? 'Editar nota' : 'Agregar nota'}
-                        onClick={() => abrirMensaje(cuota)}
-                      >
-                        <MessageSquare
-                          className={`h-4 w-4 ${tieneMensaje ? 'text-blue-600' : 'text-gray-400'}`}
-                        />
-                        {tieneMensaje && (
-                          <span className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600" />
-                        )}
-                      </Button>
+                      <div className="flex justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Ver PDF de la boleta"
+                          disabled={!tieneBoleta}
+                          onClick={() => setDialog({ tipo: 'pdf', cuota })}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Revisar boleta (aprobar / observar)"
+                          disabled={!tieneBoleta}
+                          onClick={() => setDialog({ tipo: 'revisar', cuota })}
+                        >
+                          <ClipboardCheck className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title={tieneMensaje ? 'Editar nota' : 'Agregar nota'}
+                          disabled={!tieneBoleta}
+                          onClick={() => setDialog({ tipo: 'nota', cuota })}
+                        >
+                          <MessageSquare
+                            className={`h-4 w-4 ${tieneMensaje ? 'text-blue-600' : 'text-gray-400'}`}
+                          />
+                          {tieneMensaje && (
+                            <span className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600" />
+                          )}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -938,41 +940,26 @@ function DetallePropuesta({ propuesta, secciones, docentesBackend, cursosBackend
         </CardContent>
       </Card>
 
-      {/* Dialog: editar mensaje del mes */}
-      <Dialog open={mensajeOpen} onOpenChange={(open: boolean) => {
-        setMensajeOpen(open);
-        if (!open) {
-          setMensajeCuotaState(null);
-          setMensajeInput('');
-        }
-      }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Nota — {mensajeCuota?.mes ?? ''}
-            </DialogTitle>
-            <DialogDescription>
-              El docente verá esta nota junto a la boleta de este mes en su módulo.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Textarea
-              rows={5}
-              placeholder="Escriba una observación o recordatorio para este mes..."
-              value={mensajeInput}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMensajeInput(e.target.value)}
-            />
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setMensajeOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="button" className="flex-1" onClick={guardarMensaje}>
-                Guardar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Diálogos de Boleta y Notas */}
+      <DialogVerPdf
+        open={dialog?.tipo === 'pdf'}
+        cuota={dialog?.tipo === 'pdf' ? dialog.cuota : null}
+        docenteNombre={docente?.nombreCompleto ?? ''}
+        boletaPreview={{ nombre: `boleta_${dialog?.cuota?.mes}.pdf`, fecha: dialog?.cuota?.fechaPago ?? '2026-06-27' }}
+        observaciones={dialog?.cuota?.notas ?? undefined}
+        onClose={() => setDialog(null)}
+      />
+      <DialogRevisarBoleta
+        open={dialog?.tipo === 'revisar'}
+        cuota={dialog?.tipo === 'revisar' ? dialog.cuota : null}
+        docenteNombre={docente?.nombreCompleto ?? ''}
+        onClose={() => setDialog(null)}
+      />
+      <DialogNotaBoleta
+        open={dialog?.tipo === 'nota'}
+        cuota={dialog?.tipo === 'nota' ? dialog.cuota : null}
+        onClose={() => setDialog(null)}
+      />
     </div>
   );
 }
