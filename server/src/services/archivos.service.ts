@@ -15,19 +15,22 @@ type ArchivoRow = Archivo & RowDataPacket;
 
 export async function listArchivos(): Promise<Archivo[]> {
   const [rows] = await pool.execute<ArchivoRow[]>(
-    'SELECT id_archivo, correo_usuario, ruta FROM archivos ORDER BY id_archivo ASC',
+    'SELECT id_archivo, correo_usuario, ruta, id_carrera, id_curso, fecha_subida FROM archivos ORDER BY id_archivo ASC',
   );
-  return rows.map(({ id_archivo, correo_usuario, ruta }) => ({
+  return rows.map(({ id_archivo, correo_usuario, ruta, id_carrera, id_curso, fecha_subida }) => ({
     id_archivo,
     correo_usuario,
     tipo: null,
     ruta,
+    id_carrera,
+    id_curso,
+    fecha_subida,
   }));
 }
 
 export async function findArchivoById(id: number): Promise<Archivo | null> {
   const [rows] = await pool.execute<ArchivoRow[]>(
-    'SELECT id_archivo, correo_usuario, ruta FROM archivos WHERE id_archivo = :id LIMIT 1',
+    'SELECT id_archivo, correo_usuario, ruta, id_carrera, id_curso, fecha_subida FROM archivos WHERE id_archivo = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
@@ -37,6 +40,9 @@ export async function findArchivoById(id: number): Promise<Archivo | null> {
     correo_usuario: row.correo_usuario,
     tipo: null,
     ruta: row.ruta,
+    id_carrera: row.id_carrera,
+    id_curso: row.id_curso,
+    fecha_subida: row.fecha_subida,
   };
 }
 
@@ -45,10 +51,12 @@ export async function createArchivo(input: CreateArchivoInput): Promise<Archivo>
   const dbInput = {
     correo_usuario: input.correo_usuario ?? null,
     ruta: input.ruta,
+    id_carrera: input.id_carrera ?? null,
+    id_curso: input.id_curso ?? null,
   };
 
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO archivos (correo_usuario, ruta) VALUES (:correo_usuario, :ruta)',
+    'INSERT INTO archivos (correo_usuario, ruta, id_carrera, id_curso) VALUES (:correo_usuario, :ruta, :id_carrera, :id_curso)',
     dbInput,
   );
 
@@ -57,6 +65,8 @@ export async function createArchivo(input: CreateArchivoInput): Promise<Archivo>
     correo_usuario: dbInput.correo_usuario,
     tipo: null,
     ruta: dbInput.ruta,
+    id_carrera: dbInput.id_carrera,
+    id_curso: dbInput.id_curso,
   };
 }
 
@@ -75,6 +85,14 @@ export async function updateArchivo(
   if (input.ruta !== undefined) {
     updates.push('ruta = :ruta');
     params.ruta = input.ruta;
+  }
+  if (input.id_carrera !== undefined) {
+    updates.push('id_carrera = :id_carrera');
+    params.id_carrera = input.id_carrera;
+  }
+  if (input.id_curso !== undefined) {
+    updates.push('id_curso = :id_curso');
+    params.id_curso = input.id_curso;
   }
 
   if (updates.length === 0) {

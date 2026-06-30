@@ -15,25 +15,35 @@ type UsuarioRow = Usuario & RowDataPacket;
 
 export async function listUsuarios(): Promise<Usuario[]> {
   const [rows] = await pool.execute<UsuarioRow[]>(
-    'SELECT correo_usuario, nombre, nivel FROM usuarios ORDER BY correo_usuario ASC',
+    'SELECT correo_usuario, nombre, nivel, debe_cambiar_pass FROM usuarios ORDER BY correo_usuario ASC',
   );
-  return rows.map(({ correo_usuario, nombre, nivel }) => ({ correo_usuario, nombre, nivel }));
+  return rows.map(({ correo_usuario, nombre, nivel, debe_cambiar_pass }) => ({ 
+    correo_usuario, 
+    nombre, 
+    nivel, 
+    debe_cambiar_pass: Boolean(debe_cambiar_pass)
+  }));
 }
 
 export async function findUsuarioById(id: string): Promise<Usuario | null> {
   const [rows] = await pool.execute<UsuarioRow[]>(
-    'SELECT correo_usuario, nombre, nivel FROM usuarios WHERE correo_usuario = :id LIMIT 1',
+    'SELECT correo_usuario, nombre, nivel, debe_cambiar_pass FROM usuarios WHERE correo_usuario = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
   if (!row) return null;
-  return { correo_usuario: row.correo_usuario, nombre: row.nombre, nivel: row.nivel };
+  return { 
+    correo_usuario: row.correo_usuario, 
+    nombre: row.nombre, 
+    nivel: row.nivel,
+    debe_cambiar_pass: Boolean(row.debe_cambiar_pass)
+  };
 }
 
 export async function createUsuario(input: CreateUsuarioInput): Promise<Usuario> {
   await pool.execute<ResultSetHeader>(
-    'INSERT INTO usuarios (correo_usuario, nombre, contrasena, nivel) VALUES (:correo_usuario, :nombre, :contrasena, :nivel)',
-    input,
+    'INSERT INTO usuarios (correo_usuario, nombre, contrasena, nivel, debe_cambiar_pass) VALUES (:correo_usuario, :nombre, :contrasena, :nivel, :debe_cambiar_pass)',
+    { ...input, debe_cambiar_pass: input.debe_cambiar_pass ? 1 : 0 },
   );
   // Retornar sin contrasena por seguridad
   const { contrasena, ...usuario } = input;
@@ -59,6 +69,10 @@ export async function updateUsuario(
   if (input.nivel !== undefined) {
     updates.push('nivel = :nivel');
     params.nivel = input.nivel;
+  }
+  if (input.debe_cambiar_pass !== undefined) {
+    updates.push('debe_cambiar_pass = :debe_cambiar_pass');
+    params.debe_cambiar_pass = input.debe_cambiar_pass ? 1 : 0;
   }
 
   if (updates.length === 0) {

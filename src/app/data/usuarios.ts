@@ -73,3 +73,7 @@ export async function updateUsuario(correo: string, input: UpdateUsuarioInput): 
 export async function deleteUsuario(correo: string): Promise<void> {
   await api.del(`/usuarios/${encodeURIComponent(correo)}`);
 }
+
+export async function resetPasswordUsuario(correo: string): Promise<void> {
+  await api.put(`/usuarios/${encodeURIComponent(correo)}/reset-password`, {});
+}

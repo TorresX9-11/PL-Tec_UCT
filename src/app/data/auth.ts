@@ -11,7 +11,7 @@
 
 import { apiRequest, setToken, clearToken, getToken } from './apiClient';
 
-export type Nivel = 'docente' | 'coordinador' | 'academico' | 'supervisor' | 'admin';
+export type Nivel = 'docente' | 'coordinador' | 'supervisor' | 'admin';
 
 export interface AuthUser {
   correo: string;
@@ -45,6 +45,7 @@ export async function login(correo: string, contrasena: string): Promise<AuthUse
   setToken(res.token);
   sessionStorage.setItem('tec_auth_token', res.token);
   sessionStorage.setItem('tec_auth_user', JSON.stringify(user));
+  sessionStorage.setItem('tec_auth_timestamp', Date.now().toString());
   
   // Si la API no retorna el nombre (por si acaso), rellenamos con correo
   sessionStorage.setItem('userName', user.nombre || user.correo);
@@ -75,6 +76,7 @@ export function logout(): void {
   clearToken();
   try {
     sessionStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem('tec_auth_timestamp');
   } catch {
     /* ignore */
   }

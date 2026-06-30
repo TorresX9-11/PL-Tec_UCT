@@ -13,6 +13,7 @@ export interface AuthPayload {
   nivel: UserLevel;
   id_carrera?: string;
   rut_docente?: number;
+  requiresPasswordChange?: boolean;
 }
 
 declare global {

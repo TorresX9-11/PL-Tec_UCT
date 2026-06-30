@@ -19,6 +19,7 @@ import {
 import { listPagos, updatePago } from '../../data/pagos';
 import { listPropuestas } from '../../data/propuestas';
 import { listDocentes } from '../../data/docentes';
+import { listArchivos, Archivo } from '../../data/archivos';
 import {
   DialogVerPdf,
   DialogRevisarBoleta,
@@ -93,18 +94,21 @@ export function BandejaBoletas() {
   const [cuotasBackend, setCuotasBackend] = useState<CuotaMensual[]>([]);
   const [propuestasBackend, setPropuestasBackend] = useState<any[]>([]);
   const [docentesBackend, setDocentesBackend] = useState<any[]>([]);
+  const [archivosBackend, setArchivosBackend] = useState<Archivo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [pagosRes, propRes, docRes] = await Promise.all([
+      const [pagosRes, propRes, docRes, archRes] = await Promise.all([
         listPagos(),
         listPropuestas(),
-        listDocentes()
+        listDocentes(),
+        listArchivos()
       ]);
       setCuotasBackend(pagosRes.data);
       setPropuestasBackend(propRes.data);
       setDocentesBackend(docRes.data);
+      setArchivosBackend(archRes);
     } catch (e) {
       console.error(e);
       toast.error('Error al cargar pagos');
@@ -143,17 +147,24 @@ export function BandejaBoletas() {
         contacto: ''
       };
 
-      // Mock boleta data for now
       const tieneBoleta = pago.boletaEstado !== 'Inexistente' && pago.boletaEstado !== 'Faltante';
+      
+      let archivoBoleta: Archivo | undefined;
+      if (tieneBoleta) {
+        archivoBoleta = archivosBackend
+          .filter(a => a.correoUsuario === docente.correo && a.ruta.includes(`_boleta_${pago.mes.toLowerCase()}_`))
+          .sort((a, b) => b.id - a.id)[0];
+      }
+      
       const boleta: Boleta | undefined = tieneBoleta ? {
-        id: pago.id * 100,
+        id: archivoBoleta ? archivoBoleta.id : (pago.id * 100),
         docenteId: docenteId,
         mes: pago.mes,
         año: 2026,
         estado: (pago.boletaEstado === 'Faltante' ? 'Subida' : pago.boletaEstado) as Boleta['estado'],
-        fecha: pago.fechaPago ?? new Date().toISOString().split('T')[0],
-        url: '',
-        nombre: `boleta_${pago.mes}.pdf`,
+        fecha: archivoBoleta ? (archivoBoleta.fechaSubida?.split('T')[0] ?? pago.fechaPago ?? new Date().toISOString().split('T')[0]) : (pago.fechaPago ?? new Date().toISOString().split('T')[0]),
+        url: archivoBoleta ? `http://localhost:3001/${archivoBoleta.ruta}` : '',
+        nombre: archivoBoleta ? archivoBoleta.nombre : `boleta_${pago.mes}.pdf`,
         observaciones: pago.notas ?? undefined
       } : undefined;
 
@@ -364,7 +375,7 @@ export function BandejaBoletas() {
         open={dialog?.tipo === 'pdf'}
         cuota={dialog?.tipo === 'pdf' && dialog.ctx ? dialog.ctx.cuota : null}
         docenteNombre={dialog?.tipo === 'pdf' && dialog.ctx ? dialog.ctx.docente.nombreCompleto : ''}
-        boletaPreview={dialog?.tipo === 'pdf' && dialog.ctx?.boleta ? { nombre: dialog.ctx.boleta.nombre, fecha: dialog.ctx.boleta.fecha } : undefined}
+        boletaPreview={dialog?.tipo === 'pdf' && dialog.ctx?.boleta ? { nombre: dialog.ctx.boleta.nombre, fecha: dialog.ctx.boleta.fecha, url: dialog.ctx.boleta.url } : undefined}
         observaciones={dialog?.tipo === 'pdf' && dialog.ctx?.boleta?.observaciones ? dialog.ctx.boleta.observaciones : undefined}
         onClose={() => setDialog(null)}
       />

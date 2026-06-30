@@ -1,27 +1,99 @@
-import { AlertCircle, CheckCircle, XCircle, FileText, User, Mail, Phone, BookOpen, DollarSign, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle, XCircle, FileText, User, Mail, Phone, BookOpen, DollarSign, Calendar, Loader2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Progress } from '../../components/ui/progress';
-import {
-  getDocenteById,
-  getRamosDocente,
-  getCuotasDocente,
-  getBoletasPendientes,
-  getPropuestaDocente,
-  type EstadoValidacion
-} from '../../data/mockData';
+
+import { getDocente } from '../../data/docentes';
+import { listGrupos } from '../../data/grupos';
+import { listCursos } from '../../data/cursos';
+import { listCarreras } from '../../data/carreras';
+import { listPropuestas } from '../../data/propuestas';
+import { listPagos } from '../../data/pagos';
+import type { DocenteMaestro, EstadoValidacion, SeccionAsignatura, CuotaMensual, PropuestaSemestral, Asignatura, Carrera } from '../../data/mockData';
 
 export function DocenteDashboard() {
-  // Docente logueado desde sessionStorage (fallback a id 1 para navegación directa en dev)
-  const docenteIdRaw = sessionStorage.getItem('docenteId');
-  const docenteId = docenteIdRaw ? Number(docenteIdRaw) : 1;
+  const [docente, setDocente] = useState<DocenteMaestro | null>(null);
+  const [ramos, setRamos] = useState<(SeccionAsignatura & { asignatura?: Asignatura, carrera?: Carrera, horasTotal: number })[]>([]);
+  const [propuesta, setPropuesta] = useState<PropuestaSemestral | null>(null);
+  const [cuotas, setCuotas] = useState<CuotaMensual[]>([]);
+  const [boletasPendientes, setBoletasPendientes] = useState<CuotaMensual[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const docente = getDocenteById(docenteId);
-  const ramos = getRamosDocente(docenteId);
-  const cuotas = getCuotasDocente(docenteId);
-  const boletasPendientes = getBoletasPendientes(docenteId);
-  const propuesta = getPropuestaDocente(docenteId);
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const docenteIdRaw = sessionStorage.getItem('docenteId');
+        if (!docenteIdRaw) {
+          setLoading(false);
+          return;
+        }
+        
+        const dId = Number(docenteIdRaw);
+        const doc = await getDocente(dId);
+        setDocente(doc);
+
+        if (!doc) {
+          setLoading(false);
+          return;
+        }
+
+        // Fetch groups
+        const { data: allGrupos } = await listGrupos();
+        const { data: allCursos } = await listCursos();
+        const { data: allCarreras } = await listCarreras();
+
+        const misGrupos = allGrupos.filter(g => g.docenteId === dId);
+        const ramosConInfo = misGrupos.map(g => {
+          const curso = allCursos.find(c => c.id === g.asignaturaId);
+          const carrera = allCarreras.find(c => c.id === curso?.carreraId);
+          return {
+            ...g,
+            asignatura: curso,
+            carrera: carrera,
+            horasTotal: g.horasP + g.horasM + g.horasA
+          };
+        });
+        setRamos(ramosConInfo);
+
+        // Fetch propuesta & pagos
+        const { data: allPropuestas } = await listPropuestas();
+        const miPropuesta = allPropuestas.find(p => p.docenteId === dId);
+        
+        if (miPropuesta) {
+          setPropuesta(miPropuesta);
+          const { data: allPagos } = await listPagos();
+          const misPagos = allPagos
+            .filter(p => p.propuestaId === miPropuesta.id)
+            .map((p, index) => ({
+              ...p,
+              numeroCuota: index + 1,
+              montoBruto: Math.round(miPropuesta.montoTotalPropuesta / miPropuesta.numeroCuotas),
+              boletaId: p.boletaEstado !== 'Faltante' ? p.id : undefined // Simplified mapping
+            }));
+          setCuotas(misPagos);
+          setBoletasPendientes(misPagos.filter(p => p.boletaEstado === 'Faltante'));
+        }
+
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   if (!docente) {
     return (
@@ -61,15 +133,15 @@ export function DocenteDashboard() {
       </div>
 
       {/* Alerta: Boletas con observación */}
-      {docente.boletas.filter(b => b.estado === 'Con Observación').length > 0 && (
+      {cuotas.filter(c => c.boletaEstado === 'Con Observación').length > 0 && (
         <Card className="border-red-300 bg-red-50">
           <CardHeader className="flex flex-row items-start gap-3 space-y-0 pb-3">
             <AlertCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-red-600" />
             <div className="flex-1">
               <CardTitle className="text-red-900">
-                {docente.boletas.filter(b => b.estado === 'Con Observación').length === 1
+                {cuotas.filter(c => c.boletaEstado === 'Con Observación').length === 1
                   ? '1 boleta tiene observaciones'
-                  : `${docente.boletas.filter(b => b.estado === 'Con Observación').length} boletas tienen observaciones`}
+                  : `${cuotas.filter(c => c.boletaEstado === 'Con Observación').length} boletas tienen observaciones`}
               </CardTitle>
               <CardDescription className="text-red-800">
                 El área administrativa ha revisado su boleta y requiere correcciones. Revise el detalle en la sección de boletas.
@@ -78,11 +150,11 @@ export function DocenteDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {docente.boletas
-                .filter(b => b.estado === 'Con Observación')
-                .map((boleta) => (
+              {cuotas
+                .filter(c => c.boletaEstado === 'Con Observación')
+                .map((cuota) => (
                   <div
-                    key={boleta.id}
+                    key={cuota.id}
                     className="flex items-center justify-between rounded-lg border border-red-200 bg-white p-3"
                   >
                     <div className="flex items-center gap-3">
@@ -90,10 +162,10 @@ export function DocenteDashboard() {
                         <FileText className="h-4 w-4 text-red-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{boleta.nombre}</p>
-                        {boleta.observaciones && (
+                        <p className="text-sm font-medium">Boleta de {cuota.mes}</p>
+                        {cuota.notas && (
                           <p className="text-xs text-red-600 mt-0.5 max-w-md truncate">
-                            {boleta.observaciones}
+                            {cuota.notas}
                           </p>
                         )}
                       </div>
@@ -141,7 +213,7 @@ export function DocenteDashboard() {
                     <div>
                       <p className="text-sm font-medium">Falta subir boleta de {cuota.mes}</p>
                       <p className="text-xs text-gray-500">
-                        Cuota {cuota.numeroCuota} · {fmtCLP(cuota.montoBruto)}
+                        Cuota {cuota.numeroCuota} · {fmtCLP(cuota.montoBruto || 0)}
                       </p>
                     </div>
                   </div>
@@ -225,26 +297,26 @@ export function DocenteDashboard() {
         {ramos.length > 0 && (
           <CardContent>
             <div className="space-y-2">
-              {ramos.map(({ seccion, asignatura, carrera, horasTotal }) => (
+              {ramos.map((ramo) => (
                 <div
-                  key={seccion.id}
+                  key={ramo.id}
                   className="flex items-center justify-between rounded-lg border p-3"
                 >
                   <div className="flex-1">
-                    <p className="font-medium text-sm">{asignatura?.nombre ?? '—'}</p>
+                    <p className="font-medium text-sm">{ramo.asignatura?.nombre ?? '—'}</p>
                     <p className="text-xs text-gray-500">
-                      {carrera?.nombre ?? '—'}
+                      {ramo.carrera?.nombre ?? '—'}
                       <span className="mx-1.5">·</span>
-                      Sección {seccion.seccion}
+                      Sección {ramo.seccion}
                       <span className="mx-1.5">·</span>
-                      <span className={carrera?.jornada === 'Vespertina' ? 'text-purple-600' : 'text-blue-600'}>
-                        {carrera?.jornada ?? '—'}
+                      <span className={ramo.carrera?.jornada === 'Vespertina' ? 'text-purple-600' : 'text-blue-600'}>
+                        {ramo.carrera?.jornada ?? '—'}
                       </span>
                     </p>
                   </div>
                   <div className="ml-4 text-right text-xs text-gray-600">
-                    <p>P:{seccion.horasP}h · M:{seccion.horasM}h · A:{seccion.horasA}h</p>
-                    <p className="font-semibold text-gray-800">{horasTotal}h totales</p>
+                    <p>P:{ramo.horasP}h · M:{ramo.horasM}h · A:{ramo.horasA}h</p>
+                    <p className="font-semibold text-gray-800">{ramo.horasTotal}h totales</p>
                   </div>
                 </div>
               ))}
@@ -271,17 +343,17 @@ export function DocenteDashboard() {
               <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                 <p className="text-xs text-gray-600">Pagado</p>
                 <p className="text-lg font-bold text-green-700">
-                  {fmtCLP(propuesta.montoTotalPropuesta - propuesta.saldo)}
+                  {fmtCLP(propuesta.montoTotalPropuesta - (propuesta.saldo || 0))}
                 </p>
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs text-gray-600">Saldo pendiente</p>
-                <p className="text-lg font-bold text-amber-700">{fmtCLP(propuesta.saldo)}</p>
+                <p className="text-lg font-bold text-amber-700">{fmtCLP(propuesta.saldo || 0)}</p>
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-gray-600">Cuotas pagadas</p>
                 <p className="text-lg font-bold">
-                  {propuesta.cuotasPagadas} / {propuesta.numeroCuotas}
+                  {propuesta.cuotasPagadas || 0} / {propuesta.numeroCuotas}
                 </p>
               </div>
             </div>
@@ -308,7 +380,7 @@ export function DocenteDashboard() {
                         <p className="text-sm font-medium">
                           Cuota {cuota.numeroCuota} — {cuota.mes}
                         </p>
-                        <p className="text-xs text-gray-500">{fmtCLP(cuota.montoBruto)}</p>
+                        <p className="text-xs text-gray-500">{fmtCLP(cuota.montoBruto || 0)}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">

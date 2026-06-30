@@ -37,6 +37,10 @@ export function TablaCarreras() {
   const [jornadaFilter, setJornadaFilter] = useState<string>('todas');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCarrera, setEditingCarrera] = useState<Carrera | null>(null);
+  
+  // Delete modal state
+  const [carreraToDelete, setCarreraToDelete] = useState<Carrera | null>(null);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
 
   const load = async () => {
     setLoading(true);
@@ -64,21 +68,33 @@ export function TablaCarreras() {
     return matchesSearch && matchesJornada;
   });
 
-  const handleDeleteCarrera = async (carrera: Carrera) => {
-    if (!confirm('¿Está seguro de eliminar esta carrera? Esto también afectará a sus asignaturas asociadas.')) {
-      return;
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (carreraToDelete && deleteCountdown > 0) {
+      timer = setTimeout(() => setDeleteCountdown(c => c - 1), 1000);
     }
+    return () => clearTimeout(timer);
+  }, [carreraToDelete, deleteCountdown]);
+
+  const confirmDeleteCarrera = async () => {
+    if (!carreraToDelete) return;
+    const carrera = carreraToDelete;
+    
     if (source === 'mock') {
       setCarreras((prev) => prev.filter((c) => c.id !== carrera.id));
       toast.success('Carrera eliminada (modo demo)');
+      setCarreraToDelete(null);
       return;
     }
+    
     try {
       await deleteCarrera(carrera.codigo);
-      toast.success('Carrera eliminada exitosamente');
+      toast.success('Carrera eliminada exitosamente en cascada');
       await load();
+      setCarreraToDelete(null);
     } catch (err) {
       toast.error(errMsg(err));
+      setCarreraToDelete(null);
     }
   };
 
@@ -143,27 +159,61 @@ export function TablaCarreras() {
               Agregar Carrera
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingCarrera ? 'Editar Carrera' : 'Agregar Nueva Carrera'}</DialogTitle>
-              <DialogDescription>
-                {editingCarrera
-                  ? 'Actualice los datos de la carrera'
-                  : 'Complete la información de la nueva carrera'
-                }
-              </DialogDescription>
-            </DialogHeader>
-            <FormularioCarrera
-              carrera={editingCarrera}
-              onClose={() => {
-                setOpenDialog(false);
-                setEditingCarrera(null);
-              }}
-              onSave={handleSaveCarrera}
-            />
-          </DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{editingCarrera ? 'Editar Carrera' : 'Nueva Carrera'}</DialogTitle>
+            <DialogDescription>
+              {editingCarrera
+                ? 'Modifique los detalles de la carrera seleccionada.'
+                : 'Complete el formulario para agregar una nueva carrera al sistema.'}
+            </DialogDescription>
+          </DialogHeader>
+          <FormularioCarrera
+            carrera={editingCarrera}
+            onSave={handleSaveCarrera}
+            onClose={() => setOpenDialog(false)}
+          />
+        </DialogContent>
         </Dialog>
       </div>
+
+      {/* Dialogo de Eliminación de Seguridad */}
+      <Dialog open={!!carreraToDelete} onOpenChange={(open) => !open && setCarreraToDelete(null)}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Eliminación en Cascada
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="pt-3 text-sm text-gray-500">
+                ¿Está a punto de eliminar la carrera <span className="font-bold text-black">{carreraToDelete?.nombre}</span>?
+                <br /><br />
+                <strong className="text-red-600">¡ADVERTENCIA!</strong> Esta acción es irreversible y borrará simultáneamente:
+                <ul className="list-disc pl-5 mt-2 mb-2 text-sm text-gray-600">
+                  <li>Todos los cursos vinculados a la malla de esta carrera.</li>
+                  <li>Todas las secciones, grupos y registros.</li>
+                  <li>Todos los hitos de acreditación.</li>
+                  <li>Los archivos PDF físicos de evidencia subidos para estos hitos.</li>
+                </ul>
+                Los perfiles de coordinadores no se borrarán, pero quedarán sin carrera asignada.
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setCarreraToDelete(null)}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDeleteCarrera}
+              disabled={deleteCountdown > 0}
+            >
+              {deleteCountdown > 0 ? `Eliminar Definitivamente (${deleteCountdown}s)` : 'Eliminar Definitivamente'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Aviso modo demo (backend no disponible) */}
       {source === 'mock' && (
@@ -278,7 +328,11 @@ export function TablaCarreras() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteCarrera(carrera)}
+                          className="text-red-600 hover:text-red-900 hover:bg-red-50"
+                          onClick={() => {
+                            setCarreraToDelete(carrera);
+                            setDeleteCountdown(5);
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>

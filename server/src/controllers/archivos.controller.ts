@@ -6,6 +6,13 @@ import {
 } from '../schemas/archivos.schema.js';
 import * as archivosService from '../services/archivos.service.js';
 import { HttpError } from '../middleware/error.js';
+import fs from 'fs';
+import path from 'path';
+
+const uploadsBoletasDir = path.join(process.cwd(), 'public', 'uploads', 'boletas');
+if (!fs.existsSync(uploadsBoletasDir)) {
+  fs.mkdirSync(uploadsBoletasDir, { recursive: true });
+}
 
 /**
  * Controllers del recurso `archivos`.
@@ -40,6 +47,35 @@ export async function create(req: Request, res: Response): Promise<void> {
       modulo: 'Archivos',
       actor: 'Sistema',
       descripcion: `Se ha subido un nuevo archivo: ${created.ruta.split('/').pop()}`,
+      estado: 'Subida'
+    });
+  } catch (e) {
+    console.error('Error logueando historial', e);
+  }
+
+  res.status(201).json({ data: created });
+}
+
+export async function uploadFisico(req: Request, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    throw new HttpError(400, 'BAD_REQUEST', 'No se subió ningún archivo.');
+  }
+  
+  const rutaBase = req.body.ruta ? req.body.ruta : `uploads/boletas/${file.filename}`;
+  const input = {
+    correo_usuario: req.body.correo_usuario || null,
+    ruta: rutaBase, // Using the relative path requested or fallback
+  };
+
+  const created = await archivosService.createArchivo(input);
+  
+  try {
+    await registrarEvento({
+      tipo: 'Boleta',
+      modulo: 'Archivos',
+      actor: 'Sistema',
+      descripcion: `Se ha subido un nuevo archivo físico: ${file.filename}`,
       estado: 'Subida'
     });
   } catch (e) {

@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
-import { GraduationCap, Users, FileText, Eye } from 'lucide-react';
+import { Users, FileText, Eye } from 'lucide-react';
+import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 
 export function LandingPage() {
   return (
@@ -8,7 +9,7 @@ export function LandingPage() {
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
-            <GraduationCap className="h-8 w-8 text-blue-600" />
+            <img src={tecLogo} alt="TEC UCT Logo" className="h-10 object-contain" />
             <div>
               <h1 className="text-xl font-bold text-gray-900">Plataforma TEC</h1>
               <p className="text-sm text-gray-600">Universidad Católica de Temuco</p>

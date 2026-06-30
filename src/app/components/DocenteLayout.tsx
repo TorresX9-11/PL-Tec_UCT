@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { User, LogOut, MessageSquare } from 'lucide-react';
+import { LogOut, MessageSquare } from 'lucide-react';
+import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { toast } from 'sonner';
 import { listPagos } from '../data/pagos';
+import { RequirePasswordChange } from './RequirePasswordChange';
 
 export function DocenteLayout() {
   const location = useLocation();
@@ -76,13 +78,14 @@ export function DocenteLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <RequirePasswordChange>
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <User className="h-6 w-6 text-green-600" />
+              <img src={tecLogo} alt="TEC UCT Logo" className="h-10 object-contain" />
               <div>
                 <h1 className="font-bold text-gray-900">Portal Docente - TEC UCT</h1>
                 <p className="text-xs text-gray-600">{docenteNombre}</p>
@@ -153,6 +156,16 @@ export function DocenteLayout() {
             >
               Boletas
             </Link>
+            <Link
+              to="/docente/ramos"
+              className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                isActive('/docente/ramos')
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Mis Ramos
+            </Link>
           </div>
         </div>
       </nav>
@@ -162,5 +175,6 @@ export function DocenteLayout() {
         <Outlet />
       </main>
     </div>
+    </RequirePasswordChange>
   );
 }

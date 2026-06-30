@@ -57,3 +57,48 @@ export async function getGruposPorCarrera(carreraId: string): Promise<GrupoAcade
 export async function validarGrupo(id_grupo: number, estados: Partial<GrupoAcademico>): Promise<void> {
   await api.put(`/academico/grupos/${id_grupo}/validar`, estados);
 }
+
+export interface HitoAcreditacion {
+  id_hito: number;
+  id_carrera: string;
+  nombre: string;
+  descripcion: string;
+  fecha_limite: string;
+  estado: 'Completo' | 'En Progreso' | 'Pendiente';
+  evidencias: number;
+}
+
+export async function getHitosAcreditacion(carreraId: string): Promise<HitoAcreditacion[]> {
+  return await api.get<HitoAcreditacion[]>(`/academico/acreditacion?carreraId=${encodeURIComponent(carreraId)}`);
+}
+
+export async function updateHito(id_hito: number, estado: 'Completo' | 'En Progreso' | 'Pendiente'): Promise<void> {
+  await api.put(`/academico/acreditacion/${id_hito}`, { estado });
+}
+
+export interface EvidenciaAcreditacion {
+  id_evidencia: number;
+  id_hito: number;
+  nombre_hito?: string;
+  titulo: string;
+  tipo: string;
+  descripcion: string;
+  fecha_subida: string;
+  url_archivo: string;
+}
+
+export async function addEvidenciaHito(id_hito: number, data: FormData): Promise<void> {
+  await api.post(`/academico/acreditacion/${id_hito}/evidencia`, data);
+}
+
+export async function deleteEvidenciaHito(id_evidencia: number): Promise<void> {
+  await api.del(`/academico/acreditacion/evidencia/${id_evidencia}`);
+}
+
+export async function getEvidenciasHito(id_hito: number): Promise<EvidenciaAcreditacion[]> {
+  return await api.get<EvidenciaAcreditacion[]>(`/academico/acreditacion/${id_hito}/evidencias`);
+}
+
+export async function getEvidenciasRecientes(carreraId: string): Promise<EvidenciaAcreditacion[]> {
+  return await api.get<EvidenciaAcreditacion[]>(`/academico/acreditacion/evidencias/recientes?carreraId=${encodeURIComponent(carreraId)}`);
+}

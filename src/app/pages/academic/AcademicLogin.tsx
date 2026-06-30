@@ -1,9 +1,11 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { GraduationCap, Lock, User, ArrowLeft } from 'lucide-react';
+import { Lock, User, ArrowLeft } from 'lucide-react';
+import tecLogo from '../../../styles/Logo TEC Dirección_01.png';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 import { login, type AuthUser } from '../../data/auth';
 import { ApiError } from '../../data/apiClient';
@@ -13,6 +15,7 @@ export function AcademicLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   const applyRealSession = (user: AuthUser) => {
     switch (user.nivel) {
@@ -25,8 +28,7 @@ export function AcademicLogin() {
         navigate('/supervisor/dashboard');
         return;
       }
-      case 'coordinador':
-      case 'academico': {
+      case 'coordinador': {
         toast.success(`Bienvenido/a ${user.nombre ?? user.correo}`);
         navigate('/academico/dashboard');
         return;
@@ -59,9 +61,7 @@ export function AcademicLogin() {
   };
 
   const handleForgotPassword = () => {
-    toast.info('Se ha enviado una solicitud a su Supervisor/Administrador para el restablecimiento de su contraseña.', {
-      duration: 5000,
-    });
+    setIsForgotOpen(true);
   };
 
   return (
@@ -70,7 +70,7 @@ export function AcademicLogin() {
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
-            <GraduationCap className="h-8 w-8 text-green-600" />
+            <img src={tecLogo} alt="TEC UCT Logo" className="h-10 object-contain" />
             <div>
               <h1 className="text-xl font-bold text-gray-900">Plataforma TEC</h1>
               <p className="text-sm text-gray-600">Universidad Católica de Temuco</p>
@@ -157,44 +157,24 @@ export function AcademicLogin() {
               </button>
             </div>
 
-            <div className="mt-6 space-y-3 text-center text-sm">
-              <div className="rounded-lg bg-gray-50 p-3 text-left">
-                <p className="font-medium text-gray-700">Credenciales de prueba:</p>
-                <div className="mt-2 space-y-2 text-xs">
-                  <p className="text-gray-600">
-                    <span className="font-medium text-green-700">Coordinador:</span>
-                    <br />
-                    Usuario: <code className="rounded bg-gray-200 px-1">mgonzalez@uct.cl</code> /
-                    Contraseña: <code className="rounded bg-gray-200 px-1">12222222</code>
-                    <br />
-                    <span className="text-[10px] text-gray-400">Carrera: T.U. G. y Admin. Emp.</span>
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium text-indigo-700">Supervisor:</span>
-                    <br />
-                    Usuario: <code className="rounded bg-gray-200 px-1">director.tec@uct.cl</code> /
-                    Contraseña: <code className="rounded bg-gray-200 px-1">11111111</code>
-                    <br />
-                    <span className="text-[10px] text-gray-400">Accede a /supervisor/dashboard tras login</span>
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium text-blue-700">Docente:</span>
-                    <br />
-                    Usuario: <code className="rounded bg-gray-200 px-1">juan.perez@uct.cl</code> /
-                    Contraseña: <code className="rounded bg-gray-200 px-1">docente123</code>
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium text-gray-600">Backdoor:</span>
-                    <br />
-                    Usuario: <code className="rounded bg-gray-200 px-1">academico</code> /
-                    Contraseña: <code className="rounded bg-gray-200 px-1">academico</code>
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </main>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recuperación de Contraseña</DialogTitle>
+            <DialogDescription>
+              Por favor, contacta a tu coordinador de carrera o al administrador del sistema (<strong>jonathan.carrillo@uct.cl</strong>) para solicitar un restablecimiento de tu contraseña.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => setIsForgotOpen(false)}>Entendido</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

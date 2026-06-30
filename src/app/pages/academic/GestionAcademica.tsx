@@ -18,6 +18,7 @@ import {
   type DocenteAcademico,
   type GrupoAcademico
 } from '../../data/academico';
+import { listArchivos, type Archivo } from '../../data/archivos';
 
 type EstadoValidacion = 'Validado' | 'Por Revisar' | 'Inexistente';
 
@@ -44,16 +45,21 @@ export function GestionAcademica() {
 
   const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
   const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [archivosDb, setArchivosDb] = useState<Archivo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       if (!coordinadorCarreraIdStr) return;
       try {
-        const d = await getDocentesPorCarrera(coordinadorCarreraIdStr);
-        const g = await getGruposPorCarrera(coordinadorCarreraIdStr);
+        const [d, g, a] = await Promise.all([
+          getDocentesPorCarrera(coordinadorCarreraIdStr),
+          getGruposPorCarrera(coordinadorCarreraIdStr),
+          listArchivos()
+        ]);
         setDocentes(d);
         setGrupos(g);
+        setArchivosDb(a);
       } catch (err) {
         console.error(err);
       } finally {
@@ -70,23 +76,39 @@ export function GestionAcademica() {
     const notasOK = grupos.filter(s => s.notas_estado === 'Validado').length;
     const guiaOK = grupos.filter(s => s.guia_aprendizaje === 'Validado').length;
     
-    const docsCompletos = docentes.filter(d =>
-      d.estado_cv === 'Validado' &&
-      d.estado_titulo === 'Validado' &&
-      d.estado_antecedentes === 'Validado' &&
-      d.estado_inhabilidad === 'Validado'
-    ).length;
+    const docsCompletos = docentes.filter(d => {
+      const dArchivos = archivosDb.filter(a => a.correoUsuario === d.correo_usuario);
+      const cvExists = dArchivos.some(a => a.ruta.includes('_cv.pdf'));
+      const tituloExists = dArchivos.some(a => a.ruta.includes('_cert_titulo.pdf'));
+      const antecedentesExists = dArchivos.some(a => a.ruta.includes('_cert_antecedentes.pdf'));
+      const inhabilidadExists = dArchivos.some(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+
+      return (
+        (cvExists ? d.estado_cv : 'Inexistente') === 'Validado' &&
+        (tituloExists ? d.estado_titulo : 'Inexistente') === 'Validado' &&
+        (antecedentesExists ? d.estado_antecedentes : 'Inexistente') === 'Validado' &&
+        (inhabilidadExists ? d.estado_inhabilidad : 'Inexistente') === 'Validado'
+      );
+    }).length;
     
     return { totalDocentes: docentes.length, totalSec, blackboardOK, notasOK, guiaOK, docsCompletos };
-  }, [docentes, grupos]);
+  }, [docentes, grupos, archivosDb]);
 
   // Construye el array de docs personales del docente (orden estable)
-  const docsPersonales = (d: DocenteAcademico) => [
-    { label: 'CV Actualizado', estado: d.estado_cv },
-    { label: 'Cert. Título', estado: d.estado_titulo },
-    { label: 'Cert. Antecedentes', estado: d.estado_antecedentes },
-    { label: 'Cert. Inhabilidad', estado: d.estado_inhabilidad }
-  ];
+  const docsPersonales = (d: DocenteAcademico) => {
+    const dArchivos = archivosDb.filter(a => a.correoUsuario === d.correo_usuario);
+    const cvExists = dArchivos.some(a => a.ruta.includes('_cv.pdf'));
+    const tituloExists = dArchivos.some(a => a.ruta.includes('_cert_titulo.pdf'));
+    const antecedentesExists = dArchivos.some(a => a.ruta.includes('_cert_antecedentes.pdf'));
+    const inhabilidadExists = dArchivos.some(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+
+    return [
+      { label: 'CV Actualizado', estado: cvExists ? d.estado_cv : 'Inexistente' },
+      { label: 'Cert. Título', estado: tituloExists ? d.estado_titulo : 'Inexistente' },
+      { label: 'Cert. Antecedentes', estado: antecedentesExists ? d.estado_antecedentes : 'Inexistente' },
+      { label: 'Cert. Inhabilidad', estado: inhabilidadExists ? d.estado_inhabilidad : 'Inexistente' }
+    ];
+  };
 
   const irValidarAcademicos = (rutDocente: number, seccionId: number) =>
     navigate(`/academico/validar-docente/${rutDocente}?tipo=academico&seccion=${seccionId}`);

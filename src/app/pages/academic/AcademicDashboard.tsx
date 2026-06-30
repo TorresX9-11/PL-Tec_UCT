@@ -12,11 +12,14 @@ export function AcademicDashboard() {
   const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Datos del coordinador logueado
   const userName = sessionStorage.getItem('userName') || 'Coordinador/a';
   const carreraId = sessionStorage.getItem('coordinadorCarreraId') || '';
-  const carreraNombre = getNombreCarrera(carreraId);
   const isSupervising = !!sessionStorage.getItem('modoSupervision');
+  
+  // Use supervisandoCarreraNombre if in supervision mode, otherwise fallback to mock data resolution
+  const carreraNombre = isSupervising 
+    ? (sessionStorage.getItem('supervisandoCarreraNombre') || 'Sin carrera asignada') 
+    : getNombreCarrera(carreraId);
 
   useEffect(() => {
     async function loadStats() {
@@ -55,13 +58,13 @@ export function AcademicDashboard() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">
           {isSupervising
-            ? `Visualizando: ${carreraNombre ?? 'Sin carrera asignada'}`
+            ? `Visualizando: ${carreraNombre}`
             : `Bienvenido ${userName}`}
         </h1>
         <p className="mt-2 text-gray-600 flex items-center gap-2">
           <GraduationCap className="h-4 w-4 text-green-600" />
           {isSupervising
-            ? `Modo supervisión${carreraNombre ? ` · ${carreraNombre}` : ''}`
+            ? `Modo supervisión${carreraNombre && carreraNombre !== 'Sin carrera asignada' ? ` · ${carreraNombre}` : ''}`
             : (carreraNombre
                 ? `Coordinador de ${carreraNombre}`
                 : 'Coordinador')}
@@ -70,7 +73,7 @@ export function AcademicDashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-green-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Docentes Activos</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
@@ -81,7 +84,7 @@ export function AcademicDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-green-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">CV Actualizado</CardTitle>
             <FileText className="h-4 w-4 text-green-600" />
@@ -96,7 +99,7 @@ export function AcademicDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-green-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Documentación</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
@@ -109,7 +112,7 @@ export function AcademicDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-green-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Cumplimiento GA</CardTitle>
             <TrendingUp className="h-4 w-4 text-blue-600" />
@@ -126,7 +129,7 @@ export function AcademicDashboard() {
       {/* Quick Access Modules */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Link to="/academico/plataforma-docentes">
-          <Card className="cursor-pointer transition-all hover:shadow-lg">
+          <Card className="cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-blue-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-blue-100 p-3">
@@ -158,7 +161,7 @@ export function AcademicDashboard() {
         </Link>
 
         <Link to="/academico/gestion-academica">
-          <Card className="cursor-pointer transition-all hover:shadow-lg">
+          <Card className="cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-green-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-green-100 p-3">
@@ -190,7 +193,7 @@ export function AcademicDashboard() {
         </Link>
 
         <Link to="/academico/acreditacion">
-          <Card className="cursor-pointer transition-all hover:shadow-lg">
+          <Card className="cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-purple-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-purple-100 p-3">
@@ -223,7 +226,7 @@ export function AcademicDashboard() {
       </div>
 
       {/* Alertas */}
-      <Card>
+      <Card className="border-green-200/60 shadow-lg bg-white/85 backdrop-blur-md mb-6">
         <CardHeader>
           <CardTitle>Alertas y Pendientes</CardTitle>
           <CardDescription>Acciones que requieren atención</CardDescription>

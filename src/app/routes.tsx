@@ -23,6 +23,7 @@ import { DocenteCV } from './pages/docente/DocenteCV';
 import { DocenteCertificados } from './pages/docente/DocenteCertificados';
 import { DocenteCapacitaciones } from './pages/docente/DocenteCapacitaciones';
 import { DocenteBoletas } from './pages/docente/DocenteBoletas';
+import { DocenteRamos } from './pages/docente/DocenteRamos';
 
 // Supervisor Imports
 import { SupervisorLayout } from './components/SupervisorLayout';
@@ -94,6 +95,7 @@ export const router = createBrowserRouter([
       { path: 'certificados', Component: DocenteCertificados },
       { path: 'capacitaciones', Component: DocenteCapacitaciones },
       { path: 'boletas', Component: DocenteBoletas },
+      { path: 'ramos', Component: DocenteRamos },
     ],
   },
 ]);

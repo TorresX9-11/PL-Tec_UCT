@@ -19,6 +19,7 @@ import type { CuotaMensual } from '../../data/pagos';
 export interface BoletaPreview {
   nombre: string;
   fecha: string;
+  url?: string;
 }
 
 // ============================================================================
@@ -44,40 +45,51 @@ export function DialogVerPdf({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Boleta de honorarios</DialogTitle>
           <DialogDescription>
-            {cuota && (
-              <>
-                {docenteNombre} · {cuota.mes} · {formatCLP(cuota.montoBruto)}
-              </>
-            )}
+            {docenteNombre} · {cuota?.mes} {cuota?.monto ? `· $${cuota.monto.toLocaleString('es-CL')}` : ''}
           </DialogDescription>
         </DialogHeader>
-        {cuota && boletaPreview && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border bg-gray-50 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                <FileText className="h-6 w-6 text-blue-600" />
+        {boletaPreview && (
+          <div className="space-y-4 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm gap-4 w-full">
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded bg-blue-100 text-blue-600">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium break-all" title={boletaPreview.nombre}>{boletaPreview.nombre}</div>
+                  <div className="text-xs text-gray-500 mt-1">Subida el {boletaPreview.fecha}</div>
+                </div>
               </div>
-              <div className="flex-1">
-                <div className="font-medium">{boletaPreview.nombre}</div>
-                <div className="text-xs text-gray-500">Subida el {boletaPreview.fecha}</div>
-              </div>
-              <Button variant="outline" size="sm" disabled title="Descarga simulada (mock)">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="flex-shrink-0 w-full sm:w-auto" 
+                onClick={() => boletaPreview.url && window.open(boletaPreview.url, '_blank')}
+                disabled={!boletaPreview.url}
+              >
                 <Download className="mr-1 h-4 w-4" />
-                Descargar
+                Abrir / Descargar
               </Button>
             </div>
-            <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-              <div className="text-center">
-                <FileText className="mx-auto mb-2 h-12 w-12 text-gray-400" />
-                <p>Preview del PDF</p>
-                <p className="mt-1 text-xs italic">
-                  (Mock — cuando exista backend, aquí va el visor del documento real)
-                </p>
-              </div>
+            
+            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-6 text-center w-full">
+              <FileText className="mb-4 h-16 w-16 text-blue-300" />
+              <h3 className="mb-2 text-lg font-medium text-gray-900">Documento listo</h3>
+              <p className="mb-4 text-sm text-gray-500">
+                Haz clic en el botón a continuación para abrir el documento en una nueva pestaña.
+              </p>
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => boletaPreview.url && window.open(boletaPreview.url, '_blank')}
+                disabled={!boletaPreview.url}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Ver Boleta Completa
+              </Button>
             </div>
             {observaciones && (
               <div className="rounded border border-orange-200 bg-orange-50 p-3 text-sm">

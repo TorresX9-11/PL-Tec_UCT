@@ -25,7 +25,11 @@ async function main(): Promise<void> {
   const app = express();
 
   app.disable('x-powered-by');
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    xFrameOptions: false,
+    contentSecurityPolicy: false,
+  }));
   app.use(
     cors({
       // En desarrollo reflejamos el origen de la petición (permite localhost,
@@ -44,6 +48,9 @@ async function main(): Promise<void> {
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   app.use('/archivos', express.static(path.join(process.cwd(), 'public', 'archivos')));
+
+  // Exponer carpeta uploads para visualizar archivos como PDFs
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
   app.use('/api/v1', apiRouter);
 

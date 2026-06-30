@@ -8,6 +8,8 @@ import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { getDocentesPorCarrera, getGruposPorCarrera, type DocenteAcademico, type GrupoAcademico } from '../../data/academico';
+import { listCapacitaciones, type Capacitacion } from '../../data/capacitaciones';
+import { listArchivos, type Archivo } from '../../data/archivos';
 import { toast } from 'sonner';
 
 export function PlataformaDocentes() {
@@ -15,6 +17,8 @@ export function PlataformaDocentes() {
   const [selectedDocente, setSelectedDocente] = useState<number | null>(null);
   const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
   const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [archivosDb, setArchivosDb] = useState<Archivo[]>([]);
+  const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([]);
   const [loading, setLoading] = useState(true);
 
   const carreraFiltradaId = sessionStorage.getItem('coordinadorCarreraId') || sessionStorage.getItem('supervisandoCarreraId') || '';
@@ -26,12 +30,16 @@ export function PlataformaDocentes() {
         return;
       }
       try {
-        const [docs, grps] = await Promise.all([
+        const [docs, grps, a, caps] = await Promise.all([
           getDocentesPorCarrera(carreraFiltradaId),
-          getGruposPorCarrera(carreraFiltradaId)
+          getGruposPorCarrera(carreraFiltradaId),
+          listArchivos(),
+          listCapacitaciones()
         ]);
         setDocentes(docs);
         setGrupos(grps);
+        setArchivosDb(a);
+        setCapacitaciones(caps);
       } catch (err) {
         toast.error('No se pudieron cargar los docentes.');
       } finally {
@@ -50,12 +58,20 @@ export function PlataformaDocentes() {
 
   const estadisticas = {
     totalDocentes: docentes.length,
-    documentacionCompleta: docentes.filter(
-      d => d.estado_titulo === 'Validado' && 
-           d.estado_antecedentes === 'Validado' && 
-           d.estado_inhabilidad === 'Validado'
-    ).length,
-    cvActualizados: docentes.filter(d => d.estado_cv === 'Validado').length,
+    documentacionCompleta: docentes.filter(d => {
+      const dArchivos = archivosDb.filter(a => a.correoUsuario === d.correo_usuario);
+      const tituloExists = dArchivos.some(a => a.ruta.includes('_cert_titulo.pdf'));
+      const antecedentesExists = dArchivos.some(a => a.ruta.includes('_cert_antecedentes.pdf'));
+      const inhabilidadExists = dArchivos.some(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+      
+      return (tituloExists ? d.estado_titulo : 'Inexistente') === 'Validado' && 
+             (antecedentesExists ? d.estado_antecedentes : 'Inexistente') === 'Validado' && 
+             (inhabilidadExists ? d.estado_inhabilidad : 'Inexistente') === 'Validado';
+    }).length,
+    cvActualizados: docentes.filter(d => {
+      const cvExists = archivosDb.some(a => a.correoUsuario === d.correo_usuario && a.ruta.includes('_cv.pdf'));
+      return (cvExists ? d.estado_cv : 'Inexistente') === 'Validado';
+    }).length,
     promedioCapacitaciones: docentes.length > 0 
       ? Math.round(docentes.reduce((sum, d) => sum + d.capacitaciones, 0) / docentes.length)
       : 0
@@ -72,7 +88,7 @@ export function PlataformaDocentes() {
 
       {/* Estadísticas */}
       <div className="grid gap-6 md:grid-cols-4">
-        <Card>
+        <Card className="shadow-sm hover:shadow-md transition-shadow border-blue-100/50">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">Total Docentes</CardTitle>
           </CardHeader>
@@ -121,8 +137,8 @@ export function PlataformaDocentes() {
         </Card>
       </div>
 
-      {/* Listado de Docentes */}
-      <Card>
+      {/* Lista de Docentes */}
+      <Card className="shadow-sm border-gray-200/60 bg-white/90 backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -157,10 +173,21 @@ export function PlataformaDocentes() {
               </TableHeader>
               <TableBody>
                 {filteredDocentes.map((docente) => {
+                  const dArchivos = archivosDb.filter(a => a.correoUsuario === docente.correo_usuario);
+                  const cvExists = dArchivos.some(a => a.ruta.includes('_cv.pdf'));
+                  const tituloExists = dArchivos.some(a => a.ruta.includes('_cert_titulo.pdf'));
+                  const antecedentesExists = dArchivos.some(a => a.ruta.includes('_cert_antecedentes.pdf'));
+                  const inhabilidadExists = dArchivos.some(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+
+                  const actualCv = cvExists ? docente.estado_cv : 'Inexistente';
+                  const actualTitulo = tituloExists ? docente.estado_titulo : 'Inexistente';
+                  const actualAntecedentes = antecedentesExists ? docente.estado_antecedentes : 'Inexistente';
+                  const actualInhabilidad = inhabilidadExists ? docente.estado_inhabilidad : 'Inexistente';
+
                   const certificadosCompletos =
-                    docente.estado_titulo === 'Validado' &&
-                    docente.estado_antecedentes === 'Validado' &&
-                    docente.estado_inhabilidad === 'Validado';
+                    actualTitulo === 'Validado' &&
+                    actualAntecedentes === 'Validado' &&
+                    actualInhabilidad === 'Validado';
 
                   // Filtrar grupos que pertenezcan a este docente
                   const ramos = grupos.filter(g => g.rut_docente === docente.rut_docente);
@@ -188,9 +215,9 @@ export function PlataformaDocentes() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {docente.estado_cv === 'Validado' ? (
+                        {actualCv === 'Validado' ? (
                           <Badge variant="default" className="text-xs">Al día</Badge>
-                        ) : docente.estado_cv === 'Por Revisar' ? (
+                        ) : actualCv === 'Por Revisar' ? (
                           <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                         ) : (
                           <Badge variant="destructive" className="text-xs">Pendiente</Badge>
@@ -263,32 +290,39 @@ export function PlataformaDocentes() {
                     <CardHeader>
                       <CardTitle className="text-base">Currículum Vitae</CardTitle>
                       <CardDescription>
-                        Estado: {currentDocente.estado_cv === 'Validado' ? (
-                          <Badge variant="default" className="ml-2">Al Día</Badge>
-                        ) : currentDocente.estado_cv === 'Por Revisar' ? (
-                          <Badge variant="outline" className="ml-2 border-yellow-600 text-yellow-700">Por Revisar</Badge>
-                        ) : (
-                          <Badge variant="destructive" className="ml-2">Pendiente</Badge>
-                        )}
+                        Estado: {(() => {
+                          const hasCv = archivosDb.some(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cv.pdf'));
+                          const actualCv = hasCv ? currentDocente.estado_cv : 'Inexistente';
+                          if (actualCv === 'Validado') return <Badge variant="default" className="ml-2">Al Día</Badge>;
+                          if (actualCv === 'Por Revisar') return <Badge variant="outline" className="ml-2 border-yellow-600 text-yellow-700">Por Revisar</Badge>;
+                          return <Badge variant="destructive" className="ml-2">Pendiente</Badge>;
+                        })()}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col items-center justify-center p-8 border border-dashed rounded-lg bg-gray-50">
                         <FileText className="h-10 w-10 text-gray-400 mb-2" />
                         <h4 className="text-sm font-medium text-gray-900 mb-1">Curriculum Vitae</h4>
-                        {currentDocente.estado_cv === 'Inexistente' ? (
-                          <p className="text-xs text-gray-500">El docente aún no ha subido su CV.</p>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-2"
-                            onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${currentDocente.rut_docente}_cv.pdf`, '_blank')}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            Ver PDF
-                          </Button>
-                        )}
+                        {(() => {
+                           const hasCv = archivosDb.some(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cv.pdf'));
+                           const actualCv = hasCv ? currentDocente.estado_cv : 'Inexistente';
+                           return actualCv === 'Inexistente' ? (
+                             <p className="text-xs text-gray-500">El docente aún no ha subido su CV.</p>
+                           ) : (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="mt-2"
+                               onClick={() => {
+                                 const file = archivosDb.find(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cv.pdf'));
+                                 if (file) window.open(`http://localhost:3001/${file.ruta}`, '_blank');
+                               }}
+                             >
+                               <Eye className="mr-2 h-4 w-4" />
+                               Ver PDF
+                             </Button>
+                           );
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
@@ -302,22 +336,30 @@ export function PlataformaDocentes() {
                         <CardTitle className="text-sm">Certificado de Título</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center gap-2">
-                          {currentDocente.estado_titulo === 'Validado' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">certificado_titulo.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
-                            </>
-                          ) : currentDocente.estado_titulo === 'Por Revisar' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm">certificado_titulo.pdf</span>
-                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
-                            </>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
-                          )}
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          {(() => {
+                            const hasTitulo = archivosDb.some(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cert_titulo.pdf'));
+                            const actualTitulo = hasTitulo ? currentDocente.estado_titulo : 'Inexistente';
+                            if (actualTitulo === 'Validado') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_titulo.pdf">certificado_titulo.pdf</span>
+                                  <Badge variant="default" className="ml-auto shrink-0 text-xs bg-green-600">Validado</Badge>
+                                </>
+                              );
+                            }
+                            if (actualTitulo === 'Por Revisar') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-yellow-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_titulo.pdf">certificado_titulo.pdf</span>
+                                  <Badge variant="outline" className="ml-auto shrink-0 text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
+                                </>
+                              );
+                            }
+                            return <Badge variant="destructive" className="text-xs shrink-0">Inexistente</Badge>;
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
@@ -327,22 +369,30 @@ export function PlataformaDocentes() {
                         <CardTitle className="text-sm">Certificado de Antecedentes</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center gap-2">
-                          {currentDocente.estado_antecedentes === 'Validado' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">certificado_antecedentes.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
-                            </>
-                          ) : currentDocente.estado_antecedentes === 'Por Revisar' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm">certificado_antecedentes.pdf</span>
-                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
-                            </>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
-                          )}
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          {(() => {
+                            const hasAntecedentes = archivosDb.some(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cert_antecedentes.pdf'));
+                            const actualAntecedentes = hasAntecedentes ? currentDocente.estado_antecedentes : 'Inexistente';
+                            if (actualAntecedentes === 'Validado') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_antecedentes.pdf">certificado_antecedentes.pdf</span>
+                                  <Badge variant="default" className="ml-auto shrink-0 text-xs bg-green-600">Validado</Badge>
+                                </>
+                              );
+                            }
+                            if (actualAntecedentes === 'Por Revisar') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-yellow-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_antecedentes.pdf">certificado_antecedentes.pdf</span>
+                                  <Badge variant="outline" className="ml-auto shrink-0 text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
+                                </>
+                              );
+                            }
+                            return <Badge variant="destructive" className="text-xs shrink-0">Inexistente</Badge>;
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
@@ -352,22 +402,30 @@ export function PlataformaDocentes() {
                         <CardTitle className="text-sm">Certificado de Inhabilidad</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center gap-2">
-                          {currentDocente.estado_inhabilidad === 'Validado' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">certificado_inhabilidad.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
-                            </>
-                          ) : currentDocente.estado_inhabilidad === 'Por Revisar' ? (
-                            <>
-                              <FileText className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm">certificado_inhabilidad.pdf</span>
-                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
-                            </>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
-                          )}
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          {(() => {
+                            const hasInhabilidad = archivosDb.some(a => a.correoUsuario === currentDocente.correo_usuario && a.ruta.includes('_cert_inhabilidad.pdf'));
+                            const actualInhabilidad = hasInhabilidad ? currentDocente.estado_inhabilidad : 'Inexistente';
+                            if (actualInhabilidad === 'Validado') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_inhabilidad.pdf">certificado_inhabilidad.pdf</span>
+                                  <Badge variant="default" className="ml-auto shrink-0 text-xs bg-green-600">Validado</Badge>
+                                </>
+                              );
+                            }
+                            if (actualInhabilidad === 'Por Revisar') {
+                              return (
+                                <>
+                                  <FileText className="h-4 w-4 shrink-0 text-yellow-600" />
+                                  <span className="text-sm truncate flex-1" title="certificado_inhabilidad.pdf">certificado_inhabilidad.pdf</span>
+                                  <Badge variant="outline" className="ml-auto shrink-0 text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
+                                </>
+                              );
+                            }
+                            return <Badge variant="destructive" className="text-xs shrink-0">Inexistente</Badge>;
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
@@ -377,21 +435,21 @@ export function PlataformaDocentes() {
                         <CardTitle className="text-sm">Carnet de Identidad</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 overflow-hidden">
                           {currentDocente.carnetIdentidad === 'Validado' ? (
                             <>
-                              <FileText className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">carnet_identidad.pdf</span>
-                              <Badge variant="default" className="ml-auto text-xs bg-green-600">Validado</Badge>
+                              <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                              <span className="text-sm truncate flex-1" title="carnet_identidad.pdf">carnet_identidad.pdf</span>
+                              <Badge variant="default" className="ml-auto shrink-0 text-xs bg-green-600">Validado</Badge>
                             </>
                           ) : currentDocente.carnetIdentidad === 'Por Revisar' ? (
                             <>
-                              <FileText className="h-4 w-4 text-yellow-600" />
-                              <span className="text-sm">carnet_identidad.pdf</span>
-                              <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
+                              <FileText className="h-4 w-4 shrink-0 text-yellow-600" />
+                              <span className="text-sm truncate flex-1" title="carnet_identidad.pdf">carnet_identidad.pdf</span>
+                              <Badge variant="outline" className="ml-auto shrink-0 text-xs border-yellow-600 text-yellow-700">Por Revisar</Badge>
                             </>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">Inexistente</Badge>
+                            <Badge variant="destructive" className="text-xs shrink-0">Inexistente</Badge>
                           )}
                         </div>
                       </CardContent>
@@ -404,36 +462,31 @@ export function PlataformaDocentes() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">
-                        Capacitaciones Registradas ({currentDocente.capacitaciones})
+                        Capacitaciones Registradas ({capacitaciones.filter(c => c.docenteId === currentDocente.rut_docente).length})
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
-                        <Award className="h-5 w-5 text-green-600" />
-                        <div className="flex-1">
-                          <h4 className="font-medium">Metodologías Activas de Aprendizaje</h4>
-                          <p className="text-sm text-green-700">UCT - 40 horas | Marzo 2026</p>
-                          <Badge variant="outline" className="mt-2 text-xs border-green-600 text-green-700">Completado</Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3">
-                        <Award className="h-5 w-5 text-green-600" />
-                        <div className="flex-1">
-                          <h4 className="font-medium">Evaluación por Competencias</h4>
-                          <p className="text-sm text-green-700">UCT - 30 horas | Enero 2026</p>
-                          <Badge variant="outline" className="mt-2 text-xs border-green-600 text-green-700">Completado</Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                        <Award className="h-5 w-5 text-blue-600" />
-                        <div className="flex-1">
-                          <h4 className="font-medium">Tecnologías Educativas Digitales</h4>
-                          <p className="text-sm text-blue-700">MINEDUC - 60 horas | Noviembre 2025</p>
-                          <Badge variant="outline" className="mt-2 text-xs border-blue-600 text-blue-700">Completado</Badge>
-                        </div>
-                      </div>
+                      {capacitaciones.filter(c => c.docenteId === currentDocente.rut_docente).length === 0 ? (
+                        <p className="text-sm text-gray-500">No hay capacitaciones registradas.</p>
+                      ) : (
+                        capacitaciones.filter(c => c.docenteId === currentDocente.rut_docente).map(cap => (
+                          <div key={cap.id} className="flex items-start justify-between rounded-lg border border-green-200 bg-green-50 p-3">
+                            <div className="flex items-start gap-3">
+                              <Award className="h-5 w-5 text-green-600" />
+                              <div>
+                                <h4 className="font-medium">{cap.nombre}</h4>
+                                <p className="text-sm text-green-700">{cap.institucion || 'S/I'} - {cap.horas || 0} horas | {cap.anio}</p>
+                                <Badge variant="outline" className="mt-2 text-xs border-green-600 text-green-700">Completado</Badge>
+                              </div>
+                            </div>
+                            {cap.archivoUrl && (
+                              <Button variant="outline" size="sm" onClick={() => window.open(`http://localhost:3001${cap.archivoUrl}`, '_blank')}>
+                                Ver Certificado
+                              </Button>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>

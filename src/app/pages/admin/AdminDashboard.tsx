@@ -4,32 +4,78 @@ import { Users, FileText, DollarSign, TrendingUp, AlertCircle, Inbox, Mail } fro
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
-  mockDocentesMaestros,
-  getCuotasAdmin,
-  type CuotaConContexto
+  type CuotaConContexto,
+  type DocenteMaestro,
+  type PropuestaSemestral,
+  type CuotaMensual
 } from '../../data/mockData';
+import { listDocentes } from '../../data/docentes';
+import { listPropuestas } from '../../data/propuestas';
+import { listPagos } from '../../data/pagos';
+import { Loader2 } from 'lucide-react';
 
 export function AdminDashboard() {
-  // Refresco en vivo cuando el admin de pagos cambia algo desde la Bandeja.
   const [version, setVersion] = useState(0);
+  const [cuotasContexto, setCuotasContexto] = useState<CuotaConContexto[]>([]);
+  const [docentesMaestros, setDocentesMaestros] = useState<DocenteMaestro[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [docentesRes, propuestasRes, pagosRes] = await Promise.all([
+          listDocentes(),
+          listPropuestas(),
+          listPagos()
+        ]);
+        
+        if (!mounted) return;
+        setDocentesMaestros(docentesRes.data);
+
+        const propuestasPorId = new Map<number, PropuestaSemestral>(
+          propuestasRes.data.map(p => [p.id, p])
+        );
+        const docentesPorId = new Map<number, DocenteMaestro>(
+          docentesRes.data.map(d => [d.id, d])
+        );
+
+        const out: CuotaConContexto[] = [];
+        for (const cuota of pagosRes.data) {
+          const propuesta = propuestasPorId.get(cuota.propuestaId);
+          if (!propuesta) continue;
+          // Asumimos semestre 1 2026 para el dashboard admin como estaba harcodeado
+          if (propuesta.semestre !== 1 || propuesta.año !== 2026) continue;
+          const docente = docentesPorId.get(propuesta.docenteId);
+          if (!docente) continue;
+          out.push({ cuota, docente, propuesta });
+        }
+        setCuotasContexto(out);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchData();
+
     const handler = () => setVersion(v => v + 1);
     window.addEventListener('pagos:update', handler);
     return () => {
+      mounted = false;
       window.removeEventListener('pagos:update', handler);
     };
-  }, []);
+  }, [version]);
 
   // ── Datos canónicos del semestre activo ───────────────────────────────────
-  // `getCuotasAdmin()` ya enriquece cada cuota con su docente, propuesta y boleta.
-  const cuotas = useMemo<CuotaConContexto[]>(() => getCuotasAdmin(), [version]);
+  const cuotas = cuotasContexto;
 
   // Docentes con propuesta activa (los únicos relevantes para el panel de pagos).
   const docentesActivos = useMemo(() => {
     const ids = new Set(cuotas.map(c => c.docente.id));
-    return mockDocentesMaestros.filter(d => ids.has(d.id));
-  }, [cuotas]);
+    return docentesMaestros.filter(d => ids.has(d.id));
+  }, [cuotas, docentesMaestros]);
 
   // Agrupo por jornada usando `numeroCuotas` de la propuesta (4=Diurna, 5=Vespertina).
   const propuestasUnicas = useMemo(() => {
@@ -86,7 +132,13 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
+      {loading ? (
+        <div className="flex h-32 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      ) : (
+        <>
+          <div>
         <h1 className="text-3xl font-bold text-gray-900">Módulo Administración</h1>
         <p className="mt-2 text-gray-600">
           Gestión de pagos y propuestas docentes - Semestre 1, 2026
@@ -95,7 +147,7 @@ export function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-blue-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Docentes con propuesta</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
@@ -108,7 +160,7 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-blue-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Propuestas</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
@@ -119,7 +171,7 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-blue-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Cuotas pagadas</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
@@ -132,7 +184,7 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-red-200/60 bg-white/90 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Alertas</CardTitle>
             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -149,7 +201,7 @@ export function AdminDashboard() {
       {/* Quick Access — solo destinos reales */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Link to="/admin/docentes">
-          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+          <Card className="h-full cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-blue-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-blue-100 p-3">
@@ -170,7 +222,7 @@ export function AdminDashboard() {
         </Link>
 
         <Link to="/admin/docentes#bandeja">
-          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+          <Card className="h-full cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-orange-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-orange-100 p-3">
@@ -196,7 +248,7 @@ export function AdminDashboard() {
         </Link>
 
         <Link to="/admin/correos-masivos">
-          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+          <Card className="h-full cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-green-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-green-100 p-3">
@@ -217,7 +269,7 @@ export function AdminDashboard() {
         </Link>
 
         <Link to="/admin/reportes">
-          <Card className="h-full cursor-pointer transition-all hover:shadow-lg">
+          <Card className="h-full cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2 hover:scale-[1.02] border-purple-200/60 shadow-md bg-white/80 hover:bg-white backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-purple-100 p-3">
@@ -239,7 +291,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Alertas y Pendientes (basadas en cuotas reales) */}
-      <Card>
+      <Card className="border-blue-200/60 shadow-lg bg-white/85 backdrop-blur-md mb-6">
         <CardHeader>
           <CardTitle>Alertas y Acciones Pendientes</CardTitle>
           <CardDescription>
@@ -309,7 +361,7 @@ export function AdminDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Jornada Diurna</CardTitle>
-            <CardDescription>4 cuotas: Abril · Mayo · Junio · Julio</CardDescription>
+            <CardDescription>4 cuotas: Marzo · Abril · Mayo · Junio</CardDescription>
           </CardHeader>
           <CardContent>
             <JornadaResumen
@@ -322,7 +374,7 @@ export function AdminDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Jornada Vespertina</CardTitle>
-            <CardDescription>5 cuotas: Abril · Mayo · Junio · Julio · Agosto</CardDescription>
+            <CardDescription>5 cuotas: Marzo · Abril · Mayo · Junio · Julio</CardDescription>
           </CardHeader>
           <CardContent>
             <JornadaResumen
@@ -332,6 +384,8 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -350,7 +404,7 @@ function JornadaResumen({
   const total = propuestas.reduce((s, p) => s + p.montoTotalPropuesta, 0);
   const cuotaPromedio =
     propuestas.length > 0
-      ? propuestas.reduce((s, p) => s + p.valorCuotaBruto, 0) / propuestas.length
+      ? propuestas.reduce((s, p) => s + (p.valorCuotaBruto ?? Math.round(p.montoTotalPropuesta / Math.max(1, p.numeroCuotas))), 0) / propuestas.length
       : 0;
   return (
     <div className="space-y-2">

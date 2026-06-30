@@ -13,6 +13,9 @@ export const ArchivoSchema = z.object({
   correo_usuario: z.string().email().max(32).nullable(),
   tipo: z.string().max(4).nullable(),
   ruta: z.string().min(1).max(255),
+  id_carrera: z.string().max(32).nullable().optional(),
+  id_curso: z.string().max(32).nullable().optional(),
+  fecha_subida: z.string().or(z.date()).nullable().optional(),
 });
 export type Archivo = z.infer<typeof ArchivoSchema>;
 
@@ -24,6 +27,8 @@ export const CreateArchivoSchema = z.object({
   correo_usuario: z.string().email().max(32).nullable().optional(),
   tipo: z.string().trim().max(4).nullable().optional(),
   ruta: z.string().trim().min(1).max(255),
+  id_carrera: z.string().max(32).nullable().optional(),
+  id_curso: z.string().max(32).nullable().optional(),
 });
 export type CreateArchivoInput = z.infer<typeof CreateArchivoSchema>;
 
@@ -34,6 +39,8 @@ export const UpdateArchivoSchema = z.object({
   correo_usuario: z.string().email().max(32).nullable().optional(),
   tipo: z.string().trim().max(4).nullable().optional(),
   ruta: z.string().trim().min(1).max(255).optional(),
+  id_carrera: z.string().max(32).nullable().optional(),
+  id_curso: z.string().max(32).nullable().optional(),
 });
 export type UpdateArchivoInput = z.infer<typeof UpdateArchivoSchema>;
 

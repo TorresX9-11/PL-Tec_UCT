@@ -6,28 +6,26 @@ import type {
   UpdateCapacitacionInput,
 } from '../schemas/capacitaciones.schema.js';
 
-/**
- * Capa de acceso a datos para `capacitaciones`.
- * Toda consulta usa prepared statements (`pool.execute`) — evita SQL injection.
- */
-
 type CapacitacionRow = Capacitacion & RowDataPacket;
 
 export async function listCapacitaciones(): Promise<Capacitacion[]> {
   const [rows] = await pool.execute<CapacitacionRow[]>(
-    'SELECT id_capacitacion, rut_docente, titulo, descripcion FROM capacitaciones ORDER BY id_capacitacion ASC',
+    'SELECT id_capacitacion, rut_docente, nombre, institucion, anio, horas, archivo_adjunto FROM capacitaciones ORDER BY id_capacitacion ASC',
   );
-  return rows.map(({ id_capacitacion, rut_docente, titulo, descripcion }) => ({
+  return rows.map(({ id_capacitacion, rut_docente, nombre, institucion, anio, horas, archivo_adjunto }) => ({
     id_capacitacion,
     rut_docente,
-    titulo,
-    descripcion,
+    nombre,
+    institucion,
+    anio,
+    horas,
+    archivo_adjunto,
   }));
 }
 
 export async function findCapacitacionById(id: number): Promise<Capacitacion | null> {
   const [rows] = await pool.execute<CapacitacionRow[]>(
-    'SELECT id_capacitacion, rut_docente, titulo, descripcion FROM capacitaciones WHERE id_capacitacion = :id LIMIT 1',
+    'SELECT id_capacitacion, rut_docente, nombre, institucion, anio, horas, archivo_adjunto FROM capacitaciones WHERE id_capacitacion = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
@@ -35,21 +33,26 @@ export async function findCapacitacionById(id: number): Promise<Capacitacion | n
   return {
     id_capacitacion: row.id_capacitacion,
     rut_docente: row.rut_docente,
-    titulo: row.titulo,
-    descripcion: row.descripcion,
+    nombre: row.nombre,
+    institucion: row.institucion,
+    anio: row.anio,
+    horas: row.horas,
+    archivo_adjunto: row.archivo_adjunto,
   };
 }
 
 export async function createCapacitacion(input: CreateCapacitacionInput): Promise<Capacitacion> {
-  // Convertir undefined a null para campos opcionales
   const dbInput = {
     rut_docente: input.rut_docente ?? null,
-    titulo: input.titulo ?? null,
-    descripcion: input.descripcion ?? null,
+    nombre: input.nombre ?? null,
+    institucion: input.institucion ?? null,
+    anio: input.anio ?? null,
+    horas: input.horas ?? null,
+    archivo_adjunto: input.archivo_adjunto ?? null,
   };
 
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO capacitaciones (rut_docente, titulo, descripcion) VALUES (:rut_docente, :titulo, :descripcion)',
+    'INSERT INTO capacitaciones (rut_docente, nombre, institucion, anio, horas, archivo_adjunto) VALUES (:rut_docente, :nombre, :institucion, :anio, :horas, :archivo_adjunto)',
     dbInput,
   );
   return {
@@ -62,7 +65,6 @@ export async function updateCapacitacion(
   id: number,
   input: UpdateCapacitacionInput,
 ): Promise<Capacitacion | null> {
-  // Construir query dinámica solo con campos proporcionados
   const updates: string[] = [];
   const params: Record<string, string | number | null> = { id };
 
@@ -70,17 +72,28 @@ export async function updateCapacitacion(
     updates.push('rut_docente = :rut_docente');
     params.rut_docente = input.rut_docente;
   }
-  if (input.titulo !== undefined) {
-    updates.push('titulo = :titulo');
-    params.titulo = input.titulo;
+  if (input.nombre !== undefined) {
+    updates.push('nombre = :nombre');
+    params.nombre = input.nombre;
   }
-  if (input.descripcion !== undefined) {
-    updates.push('descripcion = :descripcion');
-    params.descripcion = input.descripcion;
+  if (input.institucion !== undefined) {
+    updates.push('institucion = :institucion');
+    params.institucion = input.institucion;
+  }
+  if (input.anio !== undefined) {
+    updates.push('anio = :anio');
+    params.anio = input.anio;
+  }
+  if (input.horas !== undefined) {
+    updates.push('horas = :horas');
+    params.horas = input.horas;
+  }
+  if (input.archivo_adjunto !== undefined) {
+    updates.push('archivo_adjunto = :archivo_adjunto');
+    params.archivo_adjunto = input.archivo_adjunto;
   }
 
   if (updates.length === 0) {
-    // Si no hay campos para actualizar, retornar la capacitación existente
     return await findCapacitacionById(id);
   }
 
@@ -89,7 +102,6 @@ export async function updateCapacitacion(
 
   if (result.affectedRows === 0) return null;
 
-  // Retornar capacitación actualizada
   return await findCapacitacionById(id);
 }
 

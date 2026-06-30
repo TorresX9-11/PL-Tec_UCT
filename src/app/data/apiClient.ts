@@ -81,8 +81,12 @@ export async function apiRequest<T = unknown>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  const isFormData = body instanceof FormData;
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  
+  if (body !== undefined && !isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -93,7 +97,7 @@ export async function apiRequest<T = unknown>(
       method,
       headers,
       credentials: 'include',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isFormData ? (body as FormData) : (body !== undefined ? JSON.stringify(body) : undefined),
     });
   } catch {
     throw new ApiError(

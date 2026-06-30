@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Award, Plus, Trash2, Upload } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -7,42 +7,30 @@ import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
 
-interface Capacitacion {
-  id: number;
-  nombre: string;
-  institucion: string;
-  horas: number;
-  fecha: string;
-  certificado: string;
-}
+import { getDocente } from '../../data/docentes';
+import { listCapacitaciones, createCapacitacion, Capacitacion } from '../../data/capacitaciones';
+import { uploadArchivo } from '../../data/archivos';
+import type { DocenteMaestro } from '../../data/mockData';
 
 export function DocenteCapacitaciones() {
-  const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([
-    {
-      id: 1,
-      nombre: 'Metodologías Activas de Aprendizaje',
-      institucion: 'UCT',
-      horas: 40,
-      fecha: 'Marzo 2026',
-      certificado: 'cert_metodologias.pdf'
-    },
-    {
-      id: 2,
-      nombre: 'Evaluación por Competencias',
-      institucion: 'UCT',
-      horas: 30,
-      fecha: 'Enero 2026',
-      certificado: 'cert_evaluacion.pdf'
-    },
-    {
-      id: 3,
-      nombre: 'Tecnologías Educativas Digitales',
-      institucion: 'MINEDUC',
-      horas: 60,
-      fecha: 'Noviembre 2025',
-      certificado: 'cert_tecnologias.pdf'
-    }
-  ]);
+  const [docente, setDocente] = useState<DocenteMaestro | null>(null);
+  const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const loadData = async () => {
+    const docenteIdRaw = sessionStorage.getItem('docenteId');
+    if (!docenteIdRaw) return;
+    const dId = Number(docenteIdRaw);
+    const d = await getDocente(dId);
+    if (d) setDocente(d);
+    
+    const caps = await listCapacitaciones();
+    setCapacitaciones(caps.filter(c => c.docenteId === dId));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const [nuevaCapacitacion, setNuevaCapacitacion] = useState({
     nombre: '',
@@ -53,25 +41,30 @@ export function DocenteCapacitaciones() {
 
   const [showForm, setShowForm] = useState(false);
 
-  const handleAddCapacitacion = () => {
+  const handleAddCapacitacion = async () => {
     if (!nuevaCapacitacion.nombre || !nuevaCapacitacion.institucion || !nuevaCapacitacion.horas) {
       toast.error('Complete todos los campos requeridos');
       return;
     }
+    if (!docente) return;
 
-    const nueva: Capacitacion = {
-      id: capacitaciones.length + 1,
-      nombre: nuevaCapacitacion.nombre,
-      institucion: nuevaCapacitacion.institucion,
-      horas: parseInt(nuevaCapacitacion.horas),
-      fecha: nuevaCapacitacion.fecha || new Date().toLocaleDateString('es-CL'),
-      certificado: 'certificado.pdf'
-    };
+    try {
+      await createCapacitacion({
+        rut_docente: docente.id,
+        nombre: nuevaCapacitacion.nombre,
+        institucion: nuevaCapacitacion.institucion,
+        horas: parseInt(nuevaCapacitacion.horas),
+        anio: parseInt(nuevaCapacitacion.fecha) || new Date().getFullYear(),
+      });
 
-    setCapacitaciones([...capacitaciones, nueva]);
-    setNuevaCapacitacion({ nombre: '', institucion: '', horas: '', fecha: '' });
-    setShowForm(false);
-    toast.success('Capacitación registrada exitosamente');
+      setNuevaCapacitacion({ nombre: '', institucion: '', horas: '', fecha: '' });
+      setShowForm(false);
+      toast.success('Capacitación registrada exitosamente');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error registrando capacitación');
+    }
   };
 
   const handleDeleteCapacitacion = (id: number) => {
@@ -80,6 +73,10 @@ export function DocenteCapacitaciones() {
   };
 
   const totalHoras = capacitaciones.reduce((sum, c) => sum + c.horas, 0);
+
+  if (loading) {
+    return <div className="p-8 text-center">Cargando capacitaciones...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -160,10 +157,11 @@ export function DocenteCapacitaciones() {
             </div>
 
             <div>
-              <Label htmlFor="cap-fecha">Fecha</Label>
+              <Label htmlFor="cap-fecha">Año</Label>
               <Input
                 id="cap-fecha"
-                placeholder="Ej: Marzo 2026"
+                placeholder="Ej: 2026"
+                type="number"
                 value={nuevaCapacitacion.fecha}
                 onChange={(e) => setNuevaCapacitacion({ ...nuevaCapacitacion, fecha: e.target.value })}
               />
@@ -219,7 +217,7 @@ export function DocenteCapacitaciones() {
                   <p className={`text-sm ${
                     cap.institucion === 'UCT' ? 'text-green-700' : 'text-blue-700'
                   }`}>
-                    {cap.institucion} - {cap.horas} horas | {cap.fecha}
+                    {cap.institucion} - {cap.horas} horas | {cap.anio}
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <Badge
@@ -230,7 +228,7 @@ export function DocenteCapacitaciones() {
                           : 'border-blue-600 text-blue-700'
                       }`}
                     >
-                      {cap.certificado}
+                      {cap.archivoUrl || 'Sin certificado adjunto'}
                     </Badge>
                     <Badge variant="default" className="text-xs">Completado</Badge>
                   </div>

@@ -14,6 +14,7 @@ import {
   type DocenteAcademico,
   type GrupoAcademico
 } from '../../data/academico';
+import { listArchivos, type Archivo } from '../../data/archivos';
 
 type EstadoValidacion = 'Validado' | 'Por Revisar' | 'Inexistente';
 
@@ -37,6 +38,7 @@ export function ValidarDocente() {
   const [seccion, setSeccion] = useState<GrupoAcademico | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [archivosDb, setArchivosDb] = useState<Archivo[]>([]);
   
   const [estados, setEstados] = useState<Record<string, EstadoValidacion>>({});
 
@@ -55,6 +57,11 @@ export function ValidarDocente() {
           const grp = grps.find(g => g.id_grupo === seccionId);
           setSeccion(grp || null);
         }
+
+        const docsArchivos = await listArchivos();
+        if (doc) {
+          setArchivosDb(docsArchivos.filter(a => a.correoUsuario === doc.correo_usuario));
+        }
       } catch (err) {
         toast.error('Error al cargar datos de validación.');
       } finally {
@@ -66,11 +73,16 @@ export function ValidarDocente() {
 
   useEffect(() => {
     if (docente && tipo === 'personal') {
+      const cvExists = archivosDb.some(a => a.ruta.includes('_cv.pdf'));
+      const tituloExists = archivosDb.some(a => a.ruta.includes('_cert_titulo.pdf'));
+      const antecedentesExists = archivosDb.some(a => a.ruta.includes('_cert_antecedentes.pdf'));
+      const inhabilidadExists = archivosDb.some(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+
       setEstados({
-        estado_cv: docente.estado_cv,
-        estado_titulo: docente.estado_titulo,
-        estado_antecedentes: docente.estado_antecedentes,
-        estado_inhabilidad: docente.estado_inhabilidad
+        estado_cv: cvExists ? docente.estado_cv : 'Inexistente',
+        estado_titulo: tituloExists ? docente.estado_titulo : 'Inexistente',
+        estado_antecedentes: antecedentesExists ? docente.estado_antecedentes : 'Inexistente',
+        estado_inhabilidad: inhabilidadExists ? docente.estado_inhabilidad : 'Inexistente'
       });
     } else if (seccion && tipo === 'academico') {
       setEstados({
@@ -79,7 +91,7 @@ export function ValidarDocente() {
         notas_estado: seccion.notas_estado
       });
     }
-  }, [docente, seccion, tipo]);
+  }, [docente, seccion, tipo, archivosDb]);
 
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>;
 
@@ -206,13 +218,21 @@ export function ValidarDocente() {
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900">Curriculum Vitae</h4>
-                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_cv.pdf`, '_blank')}>Ver PDF</Button>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0" 
+                      disabled={estados['estado_cv'] === 'Inexistente'}
+                      onClick={() => {
+                        const file = archivosDb.find(a => a.ruta.includes('_cv.pdf'));
+                        if (file) window.open(`http://localhost:3001/${file.ruta}`, '_blank');
+                      }}
+                    >Ver PDF</Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   {getEstadoBadge(estados['estado_cv'])}
                   {!isReadOnly && (
-                    <Select value={estados['estado_cv']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_cv: v })}>
+                    <Select disabled={!archivosDb.some(a => a.ruta.includes('_cv.pdf'))} value={estados['estado_cv']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_cv: v })}>
                       <SelectTrigger className="w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -233,13 +253,21 @@ export function ValidarDocente() {
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900">Certificado de Título</h4>
-                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_titulo.pdf`, '_blank')}>Ver PDF</Button>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0" 
+                      disabled={estados['estado_titulo'] === 'Inexistente'}
+                      onClick={() => {
+                        const file = archivosDb.find(a => a.ruta.includes('_cert_titulo.pdf'));
+                        if (file) window.open(`http://localhost:3001/${file.ruta}`, '_blank');
+                      }}
+                    >Ver PDF</Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   {getEstadoBadge(estados['estado_titulo'])}
                   {!isReadOnly && (
-                    <Select value={estados['estado_titulo']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_titulo: v })}>
+                    <Select disabled={!archivosDb.some(a => a.ruta.includes('_cert_titulo.pdf'))} value={estados['estado_titulo']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_titulo: v })}>
                       <SelectTrigger className="w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -260,13 +288,21 @@ export function ValidarDocente() {
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900">Certificado de Antecedentes</h4>
-                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_antecedentes.pdf`, '_blank')}>Ver PDF</Button>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0" 
+                      disabled={estados['estado_antecedentes'] === 'Inexistente'}
+                      onClick={() => {
+                        const file = archivosDb.find(a => a.ruta.includes('_cert_antecedentes.pdf'));
+                        if (file) window.open(`http://localhost:3001/${file.ruta}`, '_blank');
+                      }}
+                    >Ver PDF</Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   {getEstadoBadge(estados['estado_antecedentes'])}
                   {!isReadOnly && (
-                    <Select value={estados['estado_antecedentes']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_antecedentes: v })}>
+                    <Select disabled={!archivosDb.some(a => a.ruta.includes('_cert_antecedentes.pdf'))} value={estados['estado_antecedentes']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_antecedentes: v })}>
                       <SelectTrigger className="w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -287,13 +323,21 @@ export function ValidarDocente() {
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900">Certificado de Inhabilidades</h4>
-                    <Button variant="link" className="h-auto p-0" onClick={() => window.open(`http://localhost:3001/api/v1/archivos/docente_${docente.rut_docente}_inhabilidades.pdf`, '_blank')}>Ver PDF</Button>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0" 
+                      disabled={estados['estado_inhabilidad'] === 'Inexistente'}
+                      onClick={() => {
+                        const file = archivosDb.find(a => a.ruta.includes('_cert_inhabilidad.pdf'));
+                        if (file) window.open(`http://localhost:3001/${file.ruta}`, '_blank');
+                      }}
+                    >Ver PDF</Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   {getEstadoBadge(estados['estado_inhabilidad'])}
                   {!isReadOnly && (
-                    <Select value={estados['estado_inhabilidad']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_inhabilidad: v })}>
+                    <Select disabled={!archivosDb.some(a => a.ruta.includes('_cert_inhabilidad.pdf'))} value={estados['estado_inhabilidad']} onValueChange={(v: EstadoValidacion) => setEstados({ ...estados, estado_inhabilidad: v })}>
                       <SelectTrigger className="w-[140px]">
                         <SelectValue />
                       </SelectTrigger>

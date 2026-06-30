@@ -28,16 +28,6 @@ export function DocentesTable() {
     if (next) setTab(next);
   }, [location.hash]);
 
-  const handleDeleteAll = () => {
-    const password = prompt('Ingrese la clave de seguridad para borrar la base de datos:');
-    if (password === 'TEC2026') {
-      toast.success('Base de datos eliminada exitosamente');
-      // En producción, aquí iría la lógica de borrado real
-    } else if (password !== null) {
-      toast.error('Clave incorrecta');
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -48,10 +38,6 @@ export function DocentesTable() {
             Metodología PMA: Presencial, Mixto y Administrativo
           </p>
         </div>
-        <Button variant="destructive" onClick={handleDeleteAll}>
-          <Trash2 className="mr-2 h-4 w-4" />
-          Borrar Base de Datos
-        </Button>
       </div>
 
       {/* Info Card */}

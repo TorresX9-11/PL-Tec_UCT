@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Mapean 1:1 a la tabla `usuarios` definida en database/schema.sql.
  */
 
-export const NivelSchema = z.enum(['docente', 'coordinador', 'academico', 'supervisor', 'admin']);
+export const NivelSchema = z.enum(['docente', 'coordinador', 'supervisor', 'admin']);
 export type Nivel = z.infer<typeof NivelSchema>;
 
 /**
@@ -16,6 +16,7 @@ export const UsuarioSchema = z.object({
   correo_usuario: z.string().min(1).max(32),
   nombre: z.string().min(1).max(128),
   nivel: NivelSchema,
+  debe_cambiar_pass: z.boolean().default(true),
 });
 export type Usuario = z.infer<typeof UsuarioSchema>;
 
@@ -28,6 +29,7 @@ export const CreateUsuarioSchema = z.object({
   nombre: z.string().trim().min(1).max(128),
   contrasena: z.string().min(1).max(255),
   nivel: NivelSchema.default('docente'),
+  debe_cambiar_pass: z.boolean().default(true),
 });
 export type CreateUsuarioInput = z.infer<typeof CreateUsuarioSchema>;
 
@@ -39,6 +41,7 @@ export const UpdateUsuarioSchema = z.object({
   nombre: z.string().trim().min(1).max(128).optional(),
   contrasena: z.string().min(1).max(255).optional(),
   nivel: NivelSchema.optional(),
+  debe_cambiar_pass: z.boolean().optional(),
 });
 export type UpdateUsuarioInput = z.infer<typeof UpdateUsuarioSchema>;
 

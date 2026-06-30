@@ -72,3 +72,55 @@ export async function validarGrupo(req: Request, res: Response) {
 
   res.json({ success: true });
 }
+
+export async function listarHitosAcreditacion(req: Request, res: Response) {
+  const carreraId = getCarreraId(req);
+  const hitos = await academicoService.getHitosAcreditacion(carreraId);
+  res.json({ data: hitos });
+}
+
+export async function updateHito(req: Request, res: Response) {
+  const id_hito = parseInt(req.params.id, 10);
+  if (isNaN(id_hito)) throw new HttpError(400, 'BAD_REQUEST', 'ID de hito inválido');
+
+  const { estado } = req.body;
+  if (!estado) throw new HttpError(400, 'BAD_REQUEST', 'Estado es requerido');
+
+  await academicoService.updateHitoAcreditacion(id_hito, estado);
+  res.json({ success: true });
+}
+
+export async function addEvidenciaHito(req: Request, res: Response) {
+  const id_hito = parseInt(req.params.id, 10);
+  if (isNaN(id_hito)) throw new HttpError(400, 'BAD_REQUEST', 'ID de hito inválido');
+
+  const { titulo, tipo, descripcion } = req.body;
+  if (!titulo || !tipo) throw new HttpError(400, 'BAD_REQUEST', 'Faltan datos de la evidencia');
+
+  const url_archivo = req.file ? `/uploads/${req.file.filename}` : null;
+
+  await academicoService.addEvidenciaHito(id_hito, { titulo, tipo, descripcion, url_archivo });
+  res.json({ success: true });
+}
+
+export async function listarEvidenciasHito(req: Request, res: Response) {
+  const id_hito = parseInt(req.params.id, 10);
+  if (isNaN(id_hito)) throw new HttpError(400, 'BAD_REQUEST', 'ID de hito inválido');
+
+  const evidencias = await academicoService.getEvidenciasPorHito(id_hito);
+  res.json({ data: evidencias });
+}
+
+export async function deleteEvidenciaHito(req: Request, res: Response) {
+  const id_evidencia = parseInt(req.params.id_evidencia, 10);
+  if (isNaN(id_evidencia)) throw new HttpError(400, 'BAD_REQUEST', 'ID de evidencia inválido');
+
+  await academicoService.deleteEvidenciaHito(id_evidencia);
+  res.json({ success: true });
+}
+
+export async function listarEvidenciasRecientes(req: Request, res: Response) {
+  const carreraId = getCarreraId(req);
+  const evidencias = await academicoService.getEvidenciasRecientes(carreraId);
+  res.json({ data: evidencias });
+}

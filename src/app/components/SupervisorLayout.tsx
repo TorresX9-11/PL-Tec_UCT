@@ -1,6 +1,8 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { Eye, LogOut, LayoutDashboard, Users, UserCog } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, UserCog } from 'lucide-react';
+import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { toast } from 'sonner';
+import { RequirePasswordChange } from './RequirePasswordChange';
 
 export function SupervisorLayout() {
   const location = useLocation();
@@ -22,13 +24,14 @@ export function SupervisorLayout() {
   const supervisorNombre = sessionStorage.getItem('supervisorNombre') || 'Supervisor';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <RequirePasswordChange>
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Eye className="h-6 w-6 text-indigo-600" />
+              <img src={tecLogo} alt="TEC UCT Logo" className="h-10 object-contain" />
               <div>
                 <h1 className="font-bold text-gray-900">Plataforma TEC - Supervisión</h1>
                 <p className="text-xs text-gray-600">Universidad Católica de Temuco</p>
@@ -96,5 +99,6 @@ export function SupervisorLayout() {
         <Outlet />
       </main>
     </div>
+    </RequirePasswordChange>
   );
 }

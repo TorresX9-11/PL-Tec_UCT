@@ -14,6 +14,7 @@ import {
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  resetPasswordUsuario,
   type Usuario,
   type Nivel,
   type DataSource,
@@ -21,12 +22,11 @@ import {
 import { getCurrentUser } from '../../data/auth';
 import { ApiError } from '../../data/apiClient';
 
-const NIVELES: Nivel[] = ['docente', 'coordinador', 'academico', 'supervisor', 'admin'];
+const NIVELES: Nivel[] = ['docente', 'coordinador', 'supervisor', 'admin'];
 
 const NIVEL_STYLES: Record<Nivel, string> = {
   docente: 'border-blue-300 bg-blue-50 text-blue-700',
   coordinador: 'border-green-300 bg-green-50 text-green-700',
-  academico: 'border-teal-300 bg-teal-50 text-teal-700',
   supervisor: 'border-indigo-300 bg-indigo-50 text-indigo-700',
   admin: 'border-purple-300 bg-purple-50 text-purple-700',
 };
@@ -52,6 +52,7 @@ export function Usuarios() {
   const [nivelFilter, setNivelFilter] = useState<string>('todos');
   const [openDialog, setOpenDialog] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
+  const [resetSuccessData, setResetSuccessData] = useState<{ isOpen: boolean; correo: string } | null>(null);
 
   const currentUser = getCurrentUser();
   const allowedNiveles = currentUser?.nivel === 'supervisor' 
@@ -95,6 +96,18 @@ export function Usuarios() {
       await deleteUsuario(usuario.correo_usuario);
       toast.success('Usuario eliminado exitosamente');
       await load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const handleResetPassword = async (usuario: Usuario) => {
+    if (!confirm(`¿Restablecer contraseña de ${usuario.correo_usuario} a "Uct2026!"? El usuario deberá cambiarla en su próximo ingreso.`)) {
+      return;
+    }
+    try {
+      await resetPasswordUsuario(usuario.correo_usuario);
+      setResetSuccessData({ isOpen: true, correo: usuario.correo_usuario });
     } catch (err) {
       toast.error(errMsg(err));
     }
@@ -262,6 +275,14 @@ export function Usuarios() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          title="Restablecer Contraseña"
+                          onClick={() => handleResetPassword(u)}
+                        >
+                          <KeyRound className="h-4 w-4 text-orange-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           title="Eliminar usuario"
                           onClick={() => handleDelete(u)}
                         >
@@ -303,6 +324,39 @@ export function Usuarios() {
             }}
             onSave={handleSave}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Success Dialog */}
+      <Dialog
+        open={resetSuccessData?.isOpen ?? false}
+        onOpenChange={(open) => {
+          if (!open) setResetSuccessData(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contraseña Restablecida</DialogTitle>
+            <DialogDescription>
+              La contraseña para el usuario <strong>{resetSuccessData?.correo}</strong> ha sido restablecida exitosamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-orange-200 bg-orange-50 p-4 mt-2">
+            <p className="text-sm text-orange-800">
+              Por favor, infórmele al usuario que su nueva contraseña temporal es:
+            </p>
+            <div className="mt-2 flex justify-center">
+              <code className="text-lg font-bold text-orange-900 bg-orange-200 px-3 py-1 rounded">
+                Uct2026!
+              </code>
+            </div>
+            <p className="text-xs text-orange-700 mt-3 text-center">
+              El sistema le obligará a cambiar esta contraseña en su próximo inicio de sesión.
+            </p>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => setResetSuccessData(null)}>Entendido</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

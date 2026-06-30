@@ -18,6 +18,7 @@ export const DocenteSchema = z.object({
   contacto: z.string().max(12).nullable(),
   nombre: z.string().min(1).max(64),
   nivel_docente: NivelDocenteSchema.nullable(),
+  fecha_ingreso: z.union([z.string(), z.date()]).nullable().optional(),
 });
 export type Docente = z.infer<typeof DocenteSchema>;
 
@@ -31,6 +32,7 @@ export const CreateDocenteSchema = z.object({
   contacto: z.string().max(12).nullable().optional(),
   nombre: z.string().trim().min(1).max(64),
   nivel_docente: NivelDocenteSchema.nullable().optional(),
+  fecha_ingreso: z.string().nullable().optional(),
 });
 export type CreateDocenteInput = z.infer<typeof CreateDocenteSchema>;
 
@@ -43,6 +45,7 @@ export const UpdateDocenteSchema = z.object({
   contacto: z.string().max(12).nullable().optional(),
   nombre: z.string().trim().min(1).max(64).optional(),
   nivel_docente: NivelDocenteSchema.nullable().optional(),
+  fecha_ingreso: z.string().nullable().optional(),
 });
 export type UpdateDocenteInput = z.infer<typeof UpdateDocenteSchema>;
 

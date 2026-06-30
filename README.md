@@ -25,7 +25,7 @@ El proyecto está configurado como un **Monorepo** utilizando `pnpm` (a través 
    *(Esto instalará automáticamente las dependencias del frontend y del backend gracias a la configuración del workspace en `pnpm-workspace.yaml`).*
 
 2. **Configurar Base de Datos:**
-   - Importa el esquema inicial de la base de datos ubicado en `database/schema.sql` a tu servidor MySQL local.
+   - Importa el script de la base de datos ubicado en `database/plataforma_actualizada.sql` a tu servidor MySQL local. Este script contiene el esquema actualizado y todos los datos iniciales necesarios para probar el sistema.
    - Crea un archivo `.env` en la carpeta `server/` con tus credenciales de base de datos basándote en el `server/.env.example` (o ajusta el usuario `root` y clave por defecto).
 
 3. **Levantar el Servidor Backend:**
@@ -78,3 +78,13 @@ A continuación, se detalla el progreso y las implementaciones confirmadas en el
 - El panel de **Historial** de la vista del Administrador (`Historial.tsx`) fue refactorizado, pasando de usar Mocks a consumir la API real.
 - Se dividió la pantalla en dos pestañas claras: **Historial Activo** (registro de acciones en vivo) y **Archivos Históricos** (listado de semestres anteriores consolidados).
 - Se agregó el botón crítico **"Cerrar Semestre"**, el cual emite una advertencia de sistema antes de contactar al backend y detonar el purgado y archivado masivo. 
+
+### 5. Actualizaciones de Seguridad y Mantenimiento
+- **Duración de Sesiones:** Se incrementó la duración del token JWT y sesión a 12 horas.
+- **Tipado Fuerte y Configuración IDE:** Se integró el archivo `tsconfig.json` y los tipos correspondientes de React para corregir alertas de inferencia en el entorno de desarrollo (Winsurf).
+- Se eliminó el botón riesgoso de "Borrar Base de Datos", ya que su funcionalidad fue reemplazada por el cierre de semestre.
+- Actualización de plantillas de correo masivo para incluir la firma correspondiente (`jonathan.carrillo@uct.cl`).
+
+### 6. Perfeccionamiento de Interfaces (UI/UX)
+- Se aplicó un rediseño de **Glassmorphism** y un esquema de colores más rico y dinámico a los dashboards de Coordinador (tonos verde difuminado) y Administrador (tonos azul claro).
+- Se agregaron tarjetas de estado (semestre, cuotas, estadísticas) con degradados sutiles que mejoran la sensación de profundidad.

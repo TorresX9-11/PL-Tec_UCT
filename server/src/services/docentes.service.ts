@@ -15,21 +15,22 @@ type DocenteRow = Docente & RowDataPacket;
 
 export async function listDocentes(): Promise<Docente[]> {
   const [rows] = await pool.execute<DocenteRow[]>(
-    'SELECT rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente FROM docentes ORDER BY rut_docente ASC',
+    'SELECT rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente, fecha_ingreso FROM docentes ORDER BY rut_docente ASC',
   );
-  return rows.map(({ rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente }) => ({
+  return rows.map(({ rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente, fecha_ingreso }) => ({
     rut_docente,
     dv,
     correo_usuario,
     contacto,
     nombre,
     nivel_docente,
+    fecha_ingreso,
   }));
 }
 
 export async function findDocenteById(id: number): Promise<Docente | null> {
   const [rows] = await pool.execute<DocenteRow[]>(
-    'SELECT rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente FROM docentes WHERE rut_docente = :id LIMIT 1',
+    'SELECT rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente, fecha_ingreso FROM docentes WHERE rut_docente = :id LIMIT 1',
     { id },
   );
   const row = rows[0];
@@ -41,23 +42,54 @@ export async function findDocenteById(id: number): Promise<Docente | null> {
     contacto: row.contacto,
     nombre: row.nombre,
     nivel_docente: row.nivel_docente,
+    fecha_ingreso: row.fecha_ingreso,
   };
 }
 
 export async function createDocente(input: CreateDocenteInput): Promise<Docente> {
-  // Convertir undefined a null para campos opcionales
   const dbInput = {
     ...input,
     correo_usuario: input.correo_usuario ?? null,
     contacto: input.contacto ?? null,
     nivel_docente: input.nivel_docente ?? null,
+    fecha_ingreso: input.fecha_ingreso ?? null,
   };
 
-  await pool.execute<ResultSetHeader>(
-    'INSERT INTO docentes (rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente) VALUES (:rut_docente, :dv, :correo_usuario, :contacto, :nombre, :nivel_docente)',
-    dbInput,
-  );
-  return dbInput as Docente;
+  const connection = await pool.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    if (dbInput.correo_usuario) {
+      // 1. Crear usuario (contraseña inicial = RUT sin DV)
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.default.hash(dbInput.rut_docente.toString(), 10);
+      
+      await connection.execute(
+        'INSERT IGNORE INTO usuarios (correo_usuario, nombre, contrasena, nivel, debe_cambiar_pass) VALUES (:correo, :nombre, :pass, :nivel, :debe)',
+        {
+          correo: dbInput.correo_usuario,
+          nombre: dbInput.nombre,
+          pass: hashedPassword,
+          nivel: 'docente',
+          debe: 1
+        }
+      );
+    }
+
+    // 2. Crear docente
+    await connection.execute(
+      'INSERT INTO docentes (rut_docente, dv, correo_usuario, contacto, nombre, nivel_docente, fecha_ingreso) VALUES (:rut_docente, :dv, :correo_usuario, :contacto, :nombre, :nivel_docente, :fecha_ingreso)',
+      dbInput,
+    );
+    
+    await connection.commit();
+    return dbInput as Docente;
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function updateDocente(
@@ -87,6 +119,10 @@ export async function updateDocente(
   if (input.nivel_docente !== undefined) {
     updates.push('nivel_docente = :nivel_docente');
     params.nivel_docente = input.nivel_docente;
+  }
+  if (input.fecha_ingreso !== undefined) {
+    updates.push('fecha_ingreso = :fecha_ingreso');
+    params.fecha_ingreso = input.fecha_ingreso;
   }
 
   if (updates.length === 0) {

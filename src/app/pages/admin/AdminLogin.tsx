@@ -1,9 +1,11 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { GraduationCap, Lock, User, ArrowLeft } from 'lucide-react';
+import { Lock, User, ArrowLeft } from 'lucide-react';
+import tecLogo from '../../../styles/Logo TEC Dirección_01.png';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 import { login, logout } from '../../data/auth';
 import { ApiError } from '../../data/apiClient';
@@ -13,6 +15,7 @@ export function AdminLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,7 +58,7 @@ export function AdminLogin() {
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
-            <GraduationCap className="h-8 w-8 text-blue-600" />
+            <img src={tecLogo} alt="TEC UCT Logo" className="h-10 object-contain" />
             <div>
               <h1 className="text-xl font-bold text-gray-900">Plataforma TEC</h1>
               <p className="text-sm text-gray-600">Universidad Católica de Temuco</p>
@@ -132,15 +135,34 @@ export function AdminLogin() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-gray-600">
-              <p>Credenciales de prueba:</p>
-              <p className="mt-1 font-mono text-xs">
-                Usuario: admin / Contraseña: admin
-              </p>
+            <div className="mt-4 text-center">
+              <button 
+                type="button" 
+                onClick={() => setIsForgotOpen(true)}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
             </div>
+
           </div>
         </div>
       </main>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recuperación de Contraseña</DialogTitle>
+            <DialogDescription>
+              Por favor, contacta al administrador del sistema (<strong>jonathan.carrillo@uct.cl</strong>) para solicitar un restablecimiento de tu contraseña.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => setIsForgotOpen(false)}>Entendido</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

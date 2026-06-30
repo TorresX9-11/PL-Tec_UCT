@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
-import { FileText, Trash2, Download, Eye, AlertCircle, Upload, CheckCircle2, MessageSquare } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { FileText, Download, Eye, AlertCircle, Upload, CheckCircle2, MessageSquare, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
@@ -13,153 +13,103 @@ import {
   SelectValue
 } from '../../components/ui/select';
 import { toast } from 'sonner';
-import {
-  getDocenteById,
-  getCuotasDocente,
-  getBoletasPendientes,
-  mockCuotasMensuales,
-  mockDocentesAcademicos,
-  type Boleta
-} from '../../data/mockData';
-import { useLocation } from 'react-router';
 
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
-const AÑOS = [2025, 2026, 2027];
-
-// Valor especial del select cuando el docente quiere subir una boleta fuera de las cuotas pendientes
-const PERIODO_OTRO = '__otro__';
+import { getDocente } from '../../data/docentes';
+import { listPropuestas } from '../../data/propuestas';
+import { listPagos, updatePago } from '../../data/pagos';
+import { listCursos } from '../../data/cursos';
+import { listGrupos } from '../../data/grupos';
+import { uploadFisico, deleteArchivo, listArchivos, type Archivo } from '../../data/archivos';
+import type { DocenteMaestro, Asignatura } from '../../data/mockData';
 
 export function DocenteBoletas() {
-  // Docente logueado (fallback a id 1 en dev)
-  const docenteIdRaw = sessionStorage.getItem('docenteId');
-  const docenteId = docenteIdRaw ? Number(docenteIdRaw) : 1;
-  const docente = getDocenteById(docenteId);
-
-  // State para forzar re-render tras mutar mockData (mock pattern)
-  const [version, setVersion] = useState(0);
-  const bump = () => setVersion(v => v + 1);
-
-  // Datos derivados (se recalculan cuando bump() dispara re-render)
-  const boletas = useMemo(() => (docente ? [...docente.boletas].reverse() : []), [docente, version]);
-  const cuotasPendientes = useMemo(() => getBoletasPendientes(docenteId), [docenteId, version]);
-  const cuotasDelDocente = useMemo(() => getCuotasDocente(docenteId), [docenteId, version]);
-
-  // Notas del administrador
-  const [pagosBackend, setPagosBackend] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchPagos = () => {
-      listPagos().then(res => setPagosBackend(res.data)).catch(console.error);
-      bump();
-    };
-    fetchPagos();
-    window.addEventListener('pagos:update', fetchPagos);
-    return () => window.removeEventListener('pagos:update', fetchPagos);
-  }, []);
-
-  const notasAdmin = useMemo(() => {
-    const obj: Record<number, string> = {};
-    pagosBackend.forEach(p => {
-      if (p.notas) {
-        // En un escenario real, p.id coincide con cuota.id
-        obj[p.id] = p.notas;
-      }
-    });
-    return obj;
-  }, [pagosBackend]);
-
-  // Deep-link via hash: cuando se llega con #cuota-{id} (p.ej. desde el toast de
-  // notificación del DocenteLayout), scrollear al elemento y aplicar un highlight
-  // temporal para que el docente identifique de inmediato la cuota referenciada.
-  const location = useLocation();
-  useEffect(() => {
-    if (!location.hash || !location.hash.startsWith('#cuota-')) return;
-    // Esperamos un tick para asegurar que las cards se hayan montado.
-    const timer = window.setTimeout(() => {
-      const el = document.getElementById(location.hash.slice(1));
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2', 'transition-all');
-      window.setTimeout(() => {
-        el.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'transition-all');
-      }, 2500);
-    }, 200);
-    return () => window.clearTimeout(timer);
-  }, [location.hash, notasAdmin, boletas]);
-
-  // Mapa boletaId → mensaje (cuando la cuota tiene boleta vinculada)
-  const notaPorBoleta = useMemo(() => {
-    const map: Record<number, { cuotaId: number; mes: string; mensaje: string }> = {};
-    cuotasDelDocente.forEach(cuota => {
-      const mensaje = notasAdmin[cuota.id];
-      if (mensaje && cuota.boletaId) {
-        map[cuota.boletaId] = { cuotaId: cuota.id, mes: cuota.mes, mensaje };
-      }
-    });
-    return map;
-  }, [notasAdmin, cuotasDelDocente]);
-
-  // Notas para cuotas que aún no tienen boleta subida (no se pierden)
-  const notasPendientes = useMemo(() => {
-    return cuotasDelDocente
-      .filter(cuota => notasAdmin[cuota.id] && !cuota.boletaId)
-      .map(cuota => ({
-        cuotaId: cuota.id,
-        mes: cuota.mes,
-        mensaje: notasAdmin[cuota.id]
-      }));
-  }, [notasAdmin, cuotasDelDocente]);
-
-  // Form state
+  const [docente, setDocente] = useState<DocenteMaestro | null>(null);
+  const [pagos, setPagos] = useState<any[]>([]);
+  const [propuestas, setPropuestas] = useState<any[]>([]);
+  const [archivos, setArchivos] = useState<Archivo[]>([]);
+  const [misCursosAsignados, setMisCursosAsignados] = useState<Asignatura[]>([]);
+  const [loading, setLoading] = useState(true);
+  
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<string>('');
-  const [mesManual, setMesManual] = useState<string>('');
-  const [añoManual, setAñoManual] = useState<string>(String(new Date().getFullYear()));
-  const [archivo, setArchivo] = useState<File | null>(null);
+  const [archivoSelect, setArchivoSelect] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const usarFallback = periodoSeleccionado === PERIODO_OTRO;
+  const loadData = async () => {
+    try {
+      const docenteIdRaw = sessionStorage.getItem('docenteId');
+      if (!docenteIdRaw) return;
+      const dId = Number(docenteIdRaw);
+      
+      const [d, propsRes, pagosRes, archsRes, gruposRes, cursosRes] = await Promise.all([
+        getDocente(dId),
+        listPropuestas(),
+        listPagos(),
+        listArchivos(),
+        listGrupos(),
+        listCursos()
+      ]);
 
-  if (!docente) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-gray-600">Docente no encontrado. Inicie sesión nuevamente.</p>
-      </div>
-    );
-  }
-
-  // Resuelve el "mes año" final según el modo (cuota pendiente o fallback manual)
-  const calcularPeriodo = (): { mes: string; año: number; cuotaId?: number } | null => {
-    if (!periodoSeleccionado) return null;
-
-    if (usarFallback) {
-      if (!mesManual || !añoManual) return null;
-      return { mes: mesManual, año: Number(añoManual) };
+      if (d) setDocente(d);
+      
+      const misPropuestas = propsRes.data.filter((p: any) => p.docenteId === dId);
+      const misPropuestasIds = new Set(misPropuestas.map((p: any) => p.id));
+      
+      const misPagos = pagosRes.data.filter((p: any) => misPropuestasIds.has(p.propuestaId));
+      
+      const misGrupos = gruposRes.data.filter(g => g.docenteId === dId);
+      const misCursosSet = new Set(misGrupos.map(g => g.asignaturaId));
+      const misCursos = cursosRes.data.filter(c => misCursosSet.has(c.id));
+      setMisCursosAsignados(misCursos);
+      
+      setPropuestas(misPropuestas);
+      setPagos(misPagos);
+      if (d) {
+        setArchivos(archsRes.filter(a => a.correoUsuario === d.correo && a.ruta.includes('boleta_')));
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error cargando boletas');
+    } finally {
+      setLoading(false);
     }
-
-    // Periodo proviene de una cuota pendiente (id de la cuota)
-    const cuota = cuotasPendientes.find(c => String(c.id) === periodoSeleccionado);
-    if (!cuota) return null;
-    // cuota.mes viene como "Abril 2026" → separar
-    const [mes, añoStr] = cuota.mes.split(' ');
-    return { mes, año: Number(añoStr), cuotaId: cuota.id };
   };
 
-  const periodoCalculado = calcularPeriodo();
-  const nombreGenerado = periodoCalculado
-    ? `Boleta ${periodoCalculado.mes} ${periodoCalculado.año}`
-    : '';
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // Validación pre-submit
-  const formValido = !!periodoCalculado && !!archivo;
+  const cuotasPendientes = useMemo(() => {
+    const monthMap: Record<string, number> = {
+      enero: 0, febrero: 1, marzo: 2, abril: 3,
+      mayo: 4, junio: 5, julio: 6, agosto: 7,
+      septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+    };
+    
+    // Obtenemos el mes actual (0 = enero, 11 = diciembre)
+    const currentMonth = new Date().getMonth();
+
+    return pagos.filter(p => {
+      // Usar boletaEstado (mapeado de estado_boleta en pagos.ts)
+      const isPending = p.boletaEstado === 'Faltante' || p.boletaEstado === 'Con Observación';
+      
+      const cuotaMonth = monthMap[p.mes?.toLowerCase()] ?? 11;
+      
+      // La regla de negocio indica que no se pueden subir boletas futuras.
+      // Solo se permiten meses <= al mes actual. 
+      // (Si estamos en Enero/Febrero, permitimos cerrar pagos rezagados de Nov/Dic del año anterior).
+      let isPastOrCurrent = cuotaMonth <= currentMonth;
+      if (currentMonth <= 1 && cuotaMonth >= 10) {
+        isPastOrCurrent = true;
+      }
+
+      return isPending && isPastOrCurrent;
+    });
+  }, [pagos]);
 
   const handleArchivoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
-      setArchivo(null);
+      setArchivoSelect(null);
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -167,110 +117,71 @@ export function DocenteBoletas() {
       event.target.value = '';
       return;
     }
-    setArchivo(file);
+    setArchivoSelect(file);
   };
 
-  const handleSubmit = () => {
-    if (!periodoCalculado) {
-      toast.error('Seleccione el periodo de la boleta');
-      return;
-    }
-    if (!archivo) {
-      toast.error('Seleccione el archivo PDF de la boleta');
+  const handleSubmit = async () => {
+    if (!periodoSeleccionado || !archivoSelect || !docente) {
+      toast.error('Seleccione un periodo y archivo');
       return;
     }
 
-    // Evitar duplicados: si ya existe una boleta con el mismo nombre, avisar
-    const yaExiste = docente.boletas.some(b => b.nombre === nombreGenerado);
-    if (yaExiste) {
-      toast.error(`Ya tiene subida una "${nombreGenerado}". Elimínela antes de subir una nueva.`);
-      return;
-    }
+    try {
+      const pago = pagos.find(p => String(p.id) === periodoSeleccionado);
+      const ruta = `uploads/boletas/${docente.rut}_boleta_${pago?.mes}_${Date.now()}.pdf`;
 
-    // Generar nuevo id global de boleta
-    const todosIds = mockDocentesAcademicos.flatMap(d => d.boletas.map(b => b.id));
-    const nuevoId = (todosIds.length > 0 ? Math.max(...todosIds) : 0) + 1;
-
-    const nuevaBoleta: Boleta = {
-      id: nuevoId,
-      nombre: nombreGenerado,
-      archivo: archivo.name,
-      fecha: new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }),
-      estado: 'Subida'
-    };
-
-    // Mutar mockData (patrón mock para sincronizar con dashboard/admin)
-    docente.boletas.push(nuevaBoleta);
-
-    // Si vino de una cuota pendiente, vincular la boleta a la cuota
-    if (periodoCalculado.cuotaId) {
-      const cuotaIdx = mockCuotasMensuales.findIndex(c => c.id === periodoCalculado.cuotaId);
-      if (cuotaIdx >= 0) {
-        mockCuotasMensuales[cuotaIdx] = {
-          ...mockCuotasMensuales[cuotaIdx],
-          boletaId: nuevoId,
-          boletaEstado: 'Subida'
-        };
+      await uploadFisico(archivoSelect, docente.correo, ruta);
+      
+      // Update the pago to mark the boleta as 'Subida'
+      if (pago) {
+        await updatePago(pago.id, { boletaEstado: 'Subida' });
       }
+      
+      toast.success('Boleta subida exitosamente');
+      setPeriodoSeleccionado('');
+      setArchivoSelect(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error subiendo boleta');
     }
-
-    // Reset form
-    setPeriodoSeleccionado('');
-    setMesManual('');
-    setAñoManual(String(new Date().getFullYear()));
-    setArchivo(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    toast.success(`"${nombreGenerado}" subida correctamente`);
-    bump();
   };
 
-  const handleDeleteBoleta = (id: number) => {
-    // Quitar de docente.boletas
-    const idx = docente.boletas.findIndex(b => b.id === id);
-    if (idx < 0) return;
-    docente.boletas.splice(idx, 1);
-
-    // Desvincular de cualquier cuota que la referenciara
-    mockCuotasMensuales.forEach((c, i) => {
-      if (c.boletaId === id) {
-        mockCuotasMensuales[i] = {
-          ...c,
-          boletaId: undefined,
-          boletaEstado: 'Inexistente'
-        };
+  const handleDeleteBoleta = async (id: number, archivoRuta: string) => {
+    try {
+      await deleteArchivo(id);
+      
+      // Intentar extraer el mes del nombre del archivo y revertir el pago a Faltante
+      // ruta = uploads/boletas/12345678_boleta_abril_123456.pdf
+      const parts = archivoRuta.split('_boleta_');
+      if (parts.length > 1) {
+        const mes = parts[1].split('_')[0]; // 'abril'
+        const pagoAsociado = pagos.find(p => p.mes.toLowerCase() === mes.toLowerCase());
+        if (pagoAsociado) {
+          await updatePago(pagoAsociado.id, { boletaEstado: 'Faltante' });
+        }
       }
-    });
 
-    toast.success('Boleta eliminada');
-    bump();
+      toast.success('Boleta eliminada');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error eliminando boleta');
+    }
   };
 
-  // Helper para badge de estado de la boleta
-  const renderEstadoBadge = (boleta: Boleta) => {
-    const estado = boleta.estado ?? 'Subida';
-    if (estado === 'Procesada') {
-      return (
-        <Badge variant="default" className="gap-1 bg-green-600">
-          <CheckCircle2 className="h-3 w-3" />
-          Procesada
-        </Badge>
-      );
-    }
-    if (estado === 'Con Observación') {
-      return (
-        <Badge variant="outline" className="gap-1 border-red-500 text-red-700">
-          <AlertCircle className="h-3 w-3" />
-          Con Observación
-        </Badge>
-      );
-    }
+  if (loading) {
+    return <div className="p-8 text-center">Cargando...</div>;
+  }
+
+  if (!docente) {
     return (
-      <Badge variant="outline" className="gap-1 border-blue-500 text-blue-700">
-        En revisión
-      </Badge>
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-gray-600">Docente no encontrado.</p>
+      </div>
     );
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -281,7 +192,6 @@ export function DocenteBoletas() {
         </p>
       </div>
 
-      {/* Subir Nueva Boleta */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -293,7 +203,6 @@ export function DocenteBoletas() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Selector de periodo: cuotas pendientes + opción "Otro periodo" */}
           <div>
             <Label htmlFor="periodo-boleta">
               Periodo de la cuota <span className="text-red-500">*</span>
@@ -303,73 +212,22 @@ export function DocenteBoletas() {
                 <SelectValue placeholder="Seleccione el periodo de la cuota..." />
               </SelectTrigger>
               <SelectContent>
-                {cuotasPendientes.length > 0 && (
-                  <>
-                    {cuotasPendientes.map(cuota => (
-                      <SelectItem key={cuota.id} value={String(cuota.id)}>
-                        <span className="font-medium">{cuota.mes}</span>
-                        <span className="ml-2 text-xs text-gray-500">
-                          · Cuota {cuota.numeroCuota} · ${cuota.montoBruto.toLocaleString('es-CL')}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-                <SelectItem value={PERIODO_OTRO}>Otro periodo (no listado)...</SelectItem>
+                {cuotasPendientes.map(cuota => {
+                  const cursoNames = misCursosAsignados.map(c => c.nombre).join(', ');
+                  const detalleCursos = cursoNames ? ` - ${cursoNames}` : '';
+                  return (
+                    <SelectItem key={cuota.id} value={String(cuota.id)}>
+                      <span className="font-medium capitalize">{cuota.mes}{detalleCursos}</span>
+                      <span className="ml-2 text-xs text-gray-500">
+                         · Propuesta ID: {cuota.propuestaId}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
-            {cuotasPendientes.length === 0 && !usarFallback && (
-              <p className="mt-1 text-xs text-green-700">
-                ✓ No tiene cuotas pendientes. Use "Otro periodo" si necesita resubir una boleta.
-              </p>
-            )}
           </div>
 
-          {/* Fallback: mes y año manuales */}
-          {usarFallback && (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <Label htmlFor="mes-boleta">
-                  Mes <span className="text-red-500">*</span>
-                </Label>
-                <Select value={mesManual} onValueChange={setMesManual}>
-                  <SelectTrigger id="mes-boleta">
-                    <SelectValue placeholder="Seleccione el mes..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES.map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="año-boleta">
-                  Año <span className="text-red-500">*</span>
-                </Label>
-                <Select value={añoManual} onValueChange={setAñoManual}>
-                  <SelectTrigger id="año-boleta">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AÑOS.map(a => (
-                      <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {/* Preview del nombre generado */}
-          {nombreGenerado && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-              <p className="text-xs text-gray-600">Nombre que se asignará:</p>
-              <p className="font-medium text-green-800">{nombreGenerado}</p>
-            </div>
-          )}
-
-          {/* Archivo */}
           <div>
             <Label htmlFor="archivo-boleta">
               Archivo PDF <span className="text-red-500">*</span>
@@ -381,15 +239,11 @@ export function DocenteBoletas() {
               ref={fileInputRef}
               onChange={handleArchivoChange}
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Solo archivos PDF. Máximo 5 MB.
-            </p>
           </div>
 
-          {/* Botón submit */}
           <Button
             onClick={handleSubmit}
-            disabled={!formValido}
+            disabled={!periodoSeleccionado || !archivoSelect}
             className="w-full bg-green-600 hover:bg-green-700"
           >
             <Upload className="mr-2 h-4 w-4" />
@@ -398,163 +252,65 @@ export function DocenteBoletas() {
         </CardContent>
       </Card>
 
-      {/* Notas del Administrador para cuotas sin boleta subida (solo lectura) */}
-      {notasPendientes.length > 0 && (
-        <Card className="border-amber-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-amber-600" />
-              Notas pendientes del Administrador
-            </CardTitle>
-            <CardDescription>
-              Observaciones para cuotas que aún no tienen boleta subida.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {notasPendientes.map((nota) => (
-              <div
-                key={nota.cuotaId}
-                id={`cuota-${nota.cuotaId}`}
-                className="flex items-start gap-3 rounded bg-amber-50 p-3 text-sm text-amber-900"
-              >
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                <div className="flex-1">
-                  <div className="font-semibold">{nota.mes}</div>
-                  <p className="mt-1 whitespace-pre-wrap">{nota.mensaje}</p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Resumen */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-gray-600">Resumen</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div>
-              <p className="text-3xl font-bold">{boletas.length}</p>
-              <p className="text-xs text-gray-600">Boletas subidas</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-amber-600">{cuotasPendientes.length}</p>
-              <p className="text-xs text-gray-600">Cuotas sin boleta</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-green-600">
-                {cuotasDelDocente.filter(c => c.estadoPago === 'Pagada').length}
-              </p>
-              <p className="text-xs text-gray-600">Cuotas pagadas</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Listado de Boletas */}
       <Card>
         <CardHeader>
           <CardTitle>Boletas Registradas</CardTitle>
-          <CardDescription>
-            Historial de boletas subidas al sistema
-          </CardDescription>
+          <CardDescription>Historial de boletas subidas al sistema</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {boletas.length === 0 ? (
+          {archivos.length === 0 ? (
             <div className="py-12 text-center">
               <FileText className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-4 text-gray-600">No hay boletas registradas</p>
-              <p className="text-sm text-gray-500">
-                Suba su primera boleta utilizando el formulario superior
-              </p>
             </div>
           ) : (
-            boletas.map((boleta) => {
-              const nota = notaPorBoleta[boleta.id];
+            archivos.map((archivo) => {
+              const parts = archivo.ruta.split('_boleta_');
+              const mes = parts.length > 1 ? parts[1].split('_')[0] : '';
+              const pagoAsociado = pagos.find(p => p.mes.toLowerCase() === mes.toLowerCase());
+              
+              const isObservada = pagoAsociado?.boletaEstado === 'Con Observación';
+              const isProcesada = pagoAsociado?.boletaEstado === 'Procesada';
+              
               return (
-                <div
-                  key={boleta.id}
-                  id={nota ? `cuota-${nota.cuotaId}` : undefined}
-                  className="rounded-lg border p-4 hover:bg-gray-50"
-                >
+                <div key={archivo.id} className={`rounded-lg border p-4 ${isObservada ? 'bg-red-50 border-red-200' : 'hover:bg-gray-50'}`}>
                   <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
                       <FileText className="h-6 w-6 text-blue-600" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{boleta.nombre}</h4>
-                        {renderEstadoBadge(boleta)}
-                        {nota && (
-                          <Badge variant="outline" className="gap-1 border-blue-500 text-blue-700">
-                            <MessageSquare className="h-3 w-3" />
-                            Nota del admin
-                          </Badge>
+                        <h4 className="font-medium">{archivo.nombre}</h4>
+                        {isObservada ? (
+                          <Badge variant="destructive">Con Observación</Badge>
+                        ) : isProcesada ? (
+                          <Badge variant="default" className="bg-blue-600">Aprobada</Badge>
+                        ) : (
+                          <Badge variant="default" className="bg-green-600">Subida</Badge>
                         )}
                       </div>
                       <p className="text-sm text-gray-600">
-                        {boleta.archivo}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Subido el {boleta.fecha}
+                        Ruta: {archivo.ruta}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-4 w-4 mr-1" />
-                        Ver
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteBoleta(boleta.id)}
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteBoleta(archivo.id, archivo.ruta)}>
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
                     </div>
                   </div>
-                  {nota && (
-                    <div className="mt-3 flex items-start gap-3 rounded bg-blue-50 p-3 text-sm text-blue-800">
-                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                      <div className="flex-1">
-                        <div className="font-semibold">Nota del administrador — {nota.mes}</div>
-                        <p className="mt-1 whitespace-pre-wrap">{nota.mensaje}</p>
+                  {isObservada && pagoAsociado?.notas && (
+                    <div className="mt-4 rounded-md bg-red-100 p-3 text-sm text-red-900 border border-red-200">
+                      <div className="font-semibold mb-1 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4" /> Mensaje de administración:
                       </div>
-                    </div>
-                  )}
-                  {boleta.estado === 'Con Observación' && boleta.observaciones && (
-                    <div className="mt-3 flex items-start gap-3 rounded bg-red-50 p-3 text-sm text-red-800 border border-red-200">
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-                      <div className="flex-1">
-                        <div className="font-semibold">Observación del administrador</div>
-                        <p className="mt-1 whitespace-pre-wrap">{boleta.observaciones}</p>
-                      </div>
+                      {pagoAsociado.notas}
                     </div>
                   )}
                 </div>
               );
             })
           )}
-        </CardContent>
-      </Card>
-
-      {/* Información */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="text-blue-900">Información Importante</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-800">
-          <ul className="space-y-2">
-            <li>• Las boletas deben estar en formato PDF (máximo 5 MB).</li>
-            <li>• El nombre se asigna automáticamente con el formato <strong>"Boleta Mes Año"</strong> según el periodo seleccionado.</li>
-            <li>• Cada boleta queda vinculada a su cuota para que el área administrativa pueda procesar el pago.</li>
-            <li>• Si necesita reemplazar una boleta rechazada, elimínela primero y luego suba la nueva.</li>
-          </ul>
         </CardContent>
       </Card>
     </div>

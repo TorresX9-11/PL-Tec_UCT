@@ -1,4 +1,6 @@
 import { pool } from '../config/db.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 export async function getDashboardStats(id_carrera: string) {
   // Total docentes de la carrera
@@ -160,4 +162,69 @@ export async function updateValidacionGrupo(
     `UPDATE grupos SET ${fields.join(', ')} WHERE id_grupo = ?`,
     values
   );
+}
+
+export async function getHitosAcreditacion(id_carrera: string) {
+  const [rows] = await pool.execute<any[]>('SELECT * FROM hitos_acreditacion WHERE id_carrera = ?', [id_carrera]);
+  return rows;
+}
+
+export async function updateHitoAcreditacion(id_hito: number, estado: string) {
+  await pool.execute('UPDATE hitos_acreditacion SET estado = ? WHERE id_hito = ?', [estado, id_hito]);
+}
+
+export async function addEvidenciaHito(id_hito: number, data: { titulo: string; tipo: string; descripcion: string; url_archivo: string | null }) {
+  await pool.execute(
+    'INSERT INTO evidencias_acreditacion (id_hito, titulo, tipo, descripcion, url_archivo) VALUES (?, ?, ?, ?, ?)',
+    [id_hito, data.titulo, data.tipo, data.descripcion, data.url_archivo]
+  );
+  await pool.execute('UPDATE hitos_acreditacion SET evidencias = evidencias + 1 WHERE id_hito = ?', [id_hito]);
+}
+
+export async function getEvidenciasPorHito(id_hito: number) {
+  const [rows] = await pool.execute<any[]>('SELECT * FROM evidencias_acreditacion WHERE id_hito = ? ORDER BY fecha_subida DESC', [id_hito]);
+  return rows;
+}
+
+export async function getEvidenciasRecientes(id_carrera: string) {
+  const [rows] = await pool.execute<any[]>(`
+    SELECT e.*, h.nombre as nombre_hito
+    FROM evidencias_acreditacion e
+    JOIN hitos_acreditacion h ON e.id_hito = h.id_hito
+    WHERE h.id_carrera = ?
+    ORDER BY e.fecha_subida DESC
+    LIMIT 5
+  `, [id_carrera]);
+  return rows;
+}
+
+export async function deleteEvidenciaHito(id_evidencia: number) {
+  const [rows] = await pool.execute<any[]>('SELECT id_hito, url_archivo FROM evidencias_acreditacion WHERE id_evidencia = ?', [id_evidencia]);
+  if (rows.length === 0) return;
+
+  const evidencia = rows[0];
+  const { id_hito, url_archivo } = evidencia;
+
+  // 1. Delete physical file if exists
+  if (url_archivo) {
+    // url_archivo is typically something like `/uploads/file.pdf`
+    // We want the physical path: C:\...\server\public\uploads\file.pdf
+    const filename = url_archivo.split('/').pop();
+    if (filename) {
+      const physicalPath = path.join(process.cwd(), 'public', 'uploads', filename);
+      try {
+        await fs.unlink(physicalPath);
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.error('Error deleting file physically:', err);
+        }
+      }
+    }
+  }
+
+  // 2. Delete from database
+  await pool.execute('DELETE FROM evidencias_acreditacion WHERE id_evidencia = ?', [id_evidencia]);
+
+  // 3. Update counter
+  await pool.execute('UPDATE hitos_acreditacion SET evidencias = evidencias - 1 WHERE id_hito = ?', [id_hito]);
 }

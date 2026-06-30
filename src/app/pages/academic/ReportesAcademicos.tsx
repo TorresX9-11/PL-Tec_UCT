@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, FileText } from 'lucide-react';
-import { mockDocentesAcademicos } from '../../data/mockData';
+import { getDocentesPorCarrera, getGruposPorCarrera, DocenteAcademico, GrupoAcademico } from '../../data/academico';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -11,6 +11,33 @@ import autoTable from 'jspdf-autotable';
 
 export function ReportesAcademicos() {
   const [tipoReporte, setTipoReporte] = useState<string>('general');
+  const [docentes, setDocentes] = useState<DocenteAcademico[]>([]);
+  const [grupos, setGrupos] = useState<GrupoAcademico[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    async function loadData() {
+      const carreraId = sessionStorage.getItem('coordinadorCarreraId');
+      if (!carreraId) {
+        toast.error('No se pudo determinar la carrera del coordinador.');
+        setLoading(false);
+        return;
+      }
+      try {
+        const [d, g] = await Promise.all([
+          getDocentesPorCarrera(carreraId),
+          getGruposPorCarrera(carreraId)
+        ]);
+        setDocentes(d);
+        setGrupos(g);
+      } catch (err) {
+        toast.error('Error al cargar datos para reportes');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const generarReporteGeneral = () => {
     const doc = new jsPDF('landscape');
@@ -21,18 +48,31 @@ export function ReportesAcademicos() {
 
     doc.setFontSize(11);
     doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
-    doc.text(`Total Docentes: ${mockDocentesAcademicos.length}`, 14, 34);
+    doc.text(`Total Docentes: ${docentes.length}`, 14, 34);
 
     // Preparar datos para la tabla
-    const tableData = mockDocentesAcademicos.map(docente => [
-      docente.nombreCompleto,
-      docente.rut,
-      docente.contenidoSubido ? 'Sí' : 'No',
-      `${docente.notasIngresadas}/${docente.notasTotales}`,
-      docente.guiaAprendizaje,
-      docente.cvActualizado === 'Validado' ? 'Sí' : 'No',
-      docente.capacitaciones.toString()
-    ]);
+    const tableData = docentes.map(docente => {
+      const gruposDocente = grupos.filter(g => g.rut_docente === docente.rut_docente);
+      
+      const contenidoValidados = gruposDocente.filter(g => g.contenido_blackboard === 'Validado').length;
+      const contenidoOk = gruposDocente.length > 0 && contenidoValidados === gruposDocente.length ? 'Sí' : 'No';
+      
+      const guiaValidados = gruposDocente.filter(g => g.guia_aprendizaje === 'Validado').length;
+      const guiaOk = gruposDocente.length > 0 && guiaValidados === gruposDocente.length ? 'Validado' : 'Pendiente';
+      
+      const notasIngresadas = gruposDocente.reduce((acc, g) => acc + g.notas_ingresadas, 0);
+      const notasTotales = gruposDocente.reduce((acc, g) => acc + g.notas_curso, 0);
+      
+      return [
+        docente.nombre,
+        `${docente.rut_docente}-${docente.dv}`,
+        contenidoOk,
+        `${notasIngresadas}/${notasTotales}`,
+        guiaOk,
+        docente.estado_cv === 'Validado' ? 'Sí' : 'No',
+        docente.capacitaciones.toString()
+      ];
+    });
 
     // Generar tabla
     autoTable(doc, {
@@ -60,19 +100,18 @@ export function ReportesAcademicos() {
     doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
 
     // Preparar datos para la tabla
-    const tableData = mockDocentesAcademicos.map(docente => [
-      docente.nombreCompleto,
-      docente.rut,
-      docente.cvActualizado,
-      docente.certificadoTitulo,
-      docente.certificadoAntecedentes,
-      docente.certificadoInhabilidad,
-      docente.carnetIdentidad
+    const tableData = docentes.map(docente => [
+      docente.nombre,
+      `${docente.rut_docente}-${docente.dv}`,
+      docente.estado_cv,
+      docente.estado_titulo,
+      docente.estado_antecedentes,
+      docente.estado_inhabilidad
     ]);
 
     // Generar tabla
     autoTable(doc, {
-      head: [['Docente', 'RUT', 'CV', 'Cert. Título', 'Cert. Ant.', 'Cert. Inhab.', 'Carnet ID']],
+      head: [['Docente', 'RUT', 'CV', 'Cert. Título', 'Cert. Ant.', 'Cert. Inhab.']],
       body: tableData,
       startY: 35,
       styles: { fontSize: 8 },
@@ -82,8 +121,7 @@ export function ReportesAcademicos() {
         2: { cellWidth: 'auto' },
         3: { cellWidth: 'auto' },
         4: { cellWidth: 'auto' },
-        5: { cellWidth: 'auto' },
-        6: { cellWidth: 'auto' }
+        5: { cellWidth: 'auto' }
       }
     });
 
@@ -101,16 +139,16 @@ export function ReportesAcademicos() {
     doc.setFontSize(11);
     doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 14, 28);
 
-    const totalCapacitaciones = mockDocentesAcademicos.reduce((sum, d) => sum + d.capacitaciones, 0);
-    const promedio = Math.round(totalCapacitaciones / mockDocentesAcademicos.length);
+    const totalCapacitaciones = docentes.reduce((sum, d) => sum + d.capacitaciones, 0);
+    const promedio = docentes.length > 0 ? Math.round(totalCapacitaciones / docentes.length) : 0;
 
     doc.text(`Total Capacitaciones: ${totalCapacitaciones}`, 14, 34);
     doc.text(`Promedio por Docente: ${promedio}`, 14, 40);
 
     // Preparar datos para la tabla
-    const tableData = mockDocentesAcademicos.map(docente => [
-      docente.nombreCompleto,
-      docente.rut,
+    const tableData = docentes.map(docente => [
+      docente.nombre,
+      `${docente.rut_docente}-${docente.dv}`,
       docente.capacitaciones.toString(),
       docente.capacitaciones >= promedio ? 'Sobre promedio' : 'Bajo promedio'
     ]);
@@ -252,7 +290,7 @@ export function ReportesAcademicos() {
             <CardTitle className="text-sm font-medium text-gray-600">Total Docentes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockDocentesAcademicos.length}</div>
+            <div className="text-2xl font-bold">{docentes.length}</div>
             <p className="text-xs text-gray-600">Registros en el sistema</p>
           </CardContent>
         </Card>
@@ -263,12 +301,11 @@ export function ReportesAcademicos() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockDocentesAcademicos.filter(
-                d => d.cvActualizado === 'Validado' &&
-                     d.certificadoTitulo === 'Validado' &&
-                     d.certificadoAntecedentes === 'Validado' &&
-                     d.certificadoInhabilidad === 'Validado' &&
-                     d.carnetIdentidad === 'Validado'
+              {docentes.filter(
+                d => d.estado_cv === 'Validado' &&
+                     d.estado_titulo === 'Validado' &&
+                     d.estado_antecedentes === 'Validado' &&
+                     d.estado_inhabilidad === 'Validado'
               ).length}
             </div>
             <p className="text-xs text-gray-600">Docentes con todo validado</p>
@@ -281,7 +318,7 @@ export function ReportesAcademicos() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockDocentesAcademicos.reduce((sum, d) => sum + d.capacitaciones, 0)}
+              {docentes.reduce((sum, d) => sum + d.capacitaciones, 0)}
             </div>
             <p className="text-xs text-gray-600">Entre todos los docentes</p>
           </CardContent>

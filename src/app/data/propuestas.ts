@@ -37,7 +37,9 @@ function toFrontend(p: BackendPropuesta): PropuestaSemestral {
     docenteId: p.rut_docente,
     montoTotalPropuesta: p.valor_propuesta,
     numeroCuotas: p.cuotas,
-  };
+    semestre: 1,
+    año: 2026,
+  } as PropuestaSemestral;
 }
 
 // ─── Operaciones ─────────────────────────────────────────────────────────────

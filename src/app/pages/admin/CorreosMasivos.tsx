@@ -17,15 +17,15 @@ import { type DocenteMaestro, type CuotaMensual } from '../../data/mockData';
 const PLANTILLAS: Record<string, { asunto: string; cuerpo: string }> = {
   recordatorio_boleta: {
     asunto: 'Recordatorio: subida de boleta cuota {{mes}}',
-    cuerpo: 'Estimado/a {{nombre}},\n\nLe recordamos que aún no hemos recibido su boleta de honorarios electrónica correspondiente a la cuota de {{mes}} ({{monto}}). Por favor, súbala a la plataforma a la brevedad para procesar su pago.\n\nSaludos cordiales,\nAdministración TEC-UCT'
+    cuerpo: 'Estimado/a {{nombre}},\n\nLe recordamos que aún no hemos recibido su boleta de honorarios electrónica correspondiente a la cuota de {{mes}} ({{monto}}). Por favor, súbala a la plataforma a la brevedad para procesar su pago.\n\nSaludos cordiales,\nAdministración TEC-UCT\nContacto: jonathan.carrillo@uct.cl'
   },
   observacion_boleta: {
     asunto: 'Boleta con observación — cuota {{mes}}',
-    cuerpo: 'Estimado/a {{nombre}},\n\nSu boleta correspondiente a la cuota de {{mes}} presenta observaciones. Le pedimos revisar el detalle en la plataforma y reemplazarla con la corrección indicada.\n\nSaludos cordiales,\nAdministración TEC-UCT'
+    cuerpo: 'Estimado/a {{nombre}},\n\nSu boleta correspondiente a la cuota de {{mes}} presenta observaciones. Le pedimos revisar el detalle en la plataforma y reemplazarla con la corrección indicada.\n\nSaludos cordiales,\nAdministración TEC-UCT\nContacto: jonathan.carrillo@uct.cl'
   },
   generico: {
     asunto: '',
-    cuerpo: 'Estimado/a {{nombre}},\n\n\n\nSaludos cordiales,\nAdministración TEC-UCT'
+    cuerpo: 'Estimado/a {{nombre}},\n\n\n\nSaludos cordiales,\nAdministración TEC-UCT\nContacto: jonathan.carrillo@uct.cl'
   }
 };
 

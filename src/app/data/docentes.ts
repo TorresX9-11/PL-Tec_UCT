@@ -26,6 +26,7 @@ interface BackendDocente {
   contacto: string | null;
   nombre: string;
   nivel_docente: 'A' | 'B' | 'C' | null;
+  fecha_ingreso: string | null;
 }
 
 export type DataSource = 'backend' | 'mock';
@@ -46,8 +47,8 @@ function toFrontend(b: BackendDocente): DocenteMaestro {
     nombreCompleto: b.nombre,
     correo: b.correo_usuario ?? '',
     nivelDocente: b.nivel_docente ?? undefined,
+    fechaIngreso: b.fecha_ingreso ? new Date(b.fecha_ingreso).toISOString() : '',
     // Campos no almacenados aún en la BD → valores neutros.
-    fechaIngreso: '',
     cvActualizado: SIN_VALIDAR,
     certificadoTitulo: SIN_VALIDAR,
     certificadoAntecedentes: SIN_VALIDAR,
@@ -69,6 +70,18 @@ export async function listDocentes(): Promise<ListDocentesResult> {
   } catch (err) {
     if (err instanceof ApiError && err.isNetwork) {
       return { data: mockDocentesMaestros, source: 'mock' };
+    }
+    throw err;
+  }
+}
+
+export async function getDocente(rut: number): Promise<DocenteMaestro | null> {
+  try {
+    const row = await api.get<BackendDocente>(`/docentes/${rut}`);
+    return toFrontend(row);
+  } catch (err) {
+    if (err instanceof ApiError && err.isNetwork) {
+      return mockDocentesMaestros.find(d => d.id === rut) || null;
     }
     throw err;
   }
@@ -109,9 +122,9 @@ export async function createDocente(input: DocenteInput): Promise<void> {
     rut_docente: Number(input.rut),
     dv: input.dv,
     nombre: input.nombreCompleto,
-    correo_usuario: correo ? correo : null,
-    contacto: null,
-    nivel_docente: input.nivelDocente ?? null,
+    correo_usuario: correo || null,
+    nivel_docente: input.nivelDocente || null,
+    fecha_ingreso: input.fechaIngreso ? new Date(input.fechaIngreso).toISOString().split('T')[0] : null,
   });
 }
 
@@ -125,6 +138,7 @@ export async function updateDocente(rut: number, input: DocenteInput): Promise<v
     dv: input.dv,
     nombre: input.nombreCompleto,
     nivel_docente: input.nivelDocente ?? null,
+    fecha_ingreso: input.fechaIngreso ? new Date(input.fechaIngreso).toISOString().split('T')[0] : null,
   };
   if (input.correo) body.correo_usuario = input.correo;
   await api.put(`/docentes/${rut}`, body);

@@ -49,6 +49,7 @@ function toFrontend(p: BackendPago): CuotaMensual {
     // vinculando con la propuesta correspondiente.
     docenteId: 0,
     valorCuotaBruto: 0,
+    notas: p.notas,
     // Reutilizamos el campo notas como mensajes para no romper compatibilidad
     // (ver uso en mensajesAdmin.ts, que idealmente se debe migrar también a este campo).
   };

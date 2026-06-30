@@ -21,6 +21,12 @@ export const LoginResponseSchema = z.object({
   user: z.object({
     correo: z.string(),
     nivel: z.enum(['docente', 'coordinador', 'academico', 'supervisor', 'admin']),
+    requiresPasswordChange: z.boolean().default(false),
   }),
 });
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+
+export const ChangePasswordSchema = z.object({
+  newPassword: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+});
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;

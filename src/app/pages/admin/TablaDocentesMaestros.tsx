@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, BookOpen, X, Loader2, WifiOff } from 'lucide-react';
 import { mockAsignaturas, formatRUT, type DocenteMaestro, type SeccionAsignatura } from '../../data/mockData';
 import { listGrupos, updateGrupo } from '../../data/grupos';
+import { listCursos, type CursoAsignatura } from '../../data/cursos';
 import {
   listDocentes,
   createDocente,
@@ -36,6 +37,7 @@ function errMsg(err: unknown): string {
 export function TablaDocentesMaestros() {
   const [docentes, setDocentes] = useState<DocenteMaestro[]>([]);
   const [secciones, setSecciones] = useState<SeccionAsignatura[]>([]);
+  const [cursos, setCursos] = useState<CursoAsignatura[]>([]);
   const [source, setSource] = useState<DataSource>('backend');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,10 +51,11 @@ export function TablaDocentesMaestros() {
   const load = async () => {
     setLoading(true);
     try {
-      const [res, gruposRes] = await Promise.all([listDocentes(), listGrupos()]);
+      const [res, gruposRes, cursosRes] = await Promise.all([listDocentes(), listGrupos(), listCursos()]);
       setDocentes(res.data);
       setSource(res.source);
       setSecciones(gruposRes.data);
+      setCursos(cursosRes.data);
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -174,7 +177,7 @@ export function TablaDocentesMaestros() {
     const secs = secciones.filter(s => s.docenteId === docenteId);
     const asignaturasIds = [...new Set(secs.map(s => s.asignaturaId))];
     return asignaturasIds.map(id => {
-      const asig = mockAsignaturas.find(a => a.id === id);
+      const asig = cursos.find(a => a.id === id) || mockAsignaturas.find(a => a.id === id);
       return asig ? asig.nombre : '';
     }).filter(Boolean);
   };
@@ -185,7 +188,7 @@ export function TablaDocentesMaestros() {
       .filter(s => s.docenteId === docenteId)
       .map(s => ({
         ...s,
-        asignatura: mockAsignaturas.find(a => a.id === s.asignaturaId)
+        asignatura: cursos.find(a => a.id === s.asignaturaId) || mockAsignaturas.find(a => a.id === s.asignaturaId)
       }));
   };
 
@@ -194,7 +197,7 @@ export function TablaDocentesMaestros() {
       .filter(s => s.docenteId === undefined || s.docenteId === null)
       .map(s => ({
         ...s,
-        asignatura: mockAsignaturas.find(a => a.id === s.asignaturaId)
+        asignatura: cursos.find(a => a.id === s.asignaturaId) || mockAsignaturas.find(a => a.id === s.asignaturaId)
       }));
   };
 
@@ -401,7 +404,9 @@ export function TablaDocentesMaestros() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {new Date(docente.fechaIngreso).toLocaleDateString('es-CL')}
+                        {docente.fechaIngreso 
+                          ? new Date(docente.fechaIngreso).toLocaleDateString('es-CL') 
+                          : <span className="text-gray-400 italic">No registrada</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

@@ -106,3 +106,27 @@ export async function remove(req: Request, res: Response): Promise<void> {
   }
   res.status(204).send();
 }
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  const { id } = UsuarioIdParamSchema.parse(req.params);
+
+  const existingUser = await usuariosService.findUsuarioById(id);
+  if (!existingUser) {
+    throw new HttpError(404, 'NOT_FOUND', `Usuario '${id}' no encontrado.`);
+  }
+
+  if (req.user?.nivel === 'admin' && existingUser.nivel !== 'docente' && existingUser.nivel !== 'admin') {
+    throw new HttpError(403, 'FORBIDDEN', 'No tienes permiso para restablecer la contraseña a este usuario.');
+  }
+
+  // Establecer contraseña genérica y forzar cambio
+  const defaultPassword = 'Uct2026!';
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  
+  await usuariosService.updateUsuario(id, {
+    contrasena: hashedPassword,
+    debe_cambiar_pass: true
+  });
+
+  res.json({ message: 'Contraseña restablecida exitosamente.' });
+}
