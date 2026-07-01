@@ -26,16 +26,35 @@ export async function login(req: Request, res: Response): Promise<void> {
   // Verificar contraseña con bcrypt
   // Si la contraseña no tiene el formato de bcrypt (texto plano antiguo), hacer comparación directa
   let passwordMatch = false;
+  let wasPlainText = false;
+  
   if (user.contrasena.length >= 60 && user.contrasena.startsWith('$2')) {
     // Es un hash bcrypt
     passwordMatch = await bcrypt.compare(contrasena, user.contrasena);
   } else {
     // Es texto plano antiguo (migración en progreso)
     passwordMatch = contrasena === user.contrasena;
+    wasPlainText = true;
   }
 
   if (!passwordMatch) {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Credenciales inválidas.');
+  }
+
+  // Cifrado transparente: Si entró con texto plano, actualizar su clave en BD con bcrypt en silencio.
+  if (wasPlainText && passwordMatch) {
+    try {
+      const newHash = await bcrypt.hash(contrasena, 10);
+      await pool.execute(
+        'UPDATE usuarios SET contrasena = :contrasena WHERE correo_usuario = :correo_usuario',
+        { contrasena: newHash, correo_usuario }
+      );
+      // eslint-disable-next-line no-console
+      console.log(`[auth] Contraseña de ${correo_usuario} cifrada transparentemente.`);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[auth] Error cifrando contraseña en texto plano para ${correo_usuario}:`, err);
+    }
   }
 
   // Obtener datos específicos según el rol

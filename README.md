@@ -43,9 +43,40 @@ El proyecto está configurado como un **Monorepo** utilizando `pnpm` (a través 
    ```
    *(El frontend estará disponible para abrir en el navegador en http://localhost:5173).*
 
+   *(El frontend estará disponible para abrir en el navegador en http://localhost:5173).*
+
 ---
 
-## 🏗️ Arquitectura y Stack Tecnológico
+## 🌍 Despliegue en Producción (Servidor)
+
+Para montar la plataforma en un servidor real (VPS, AWS, DigitalOcean, etc.), el proceso recomendado es el siguiente:
+
+1. **Construir el Frontend (React):**
+   ```powershell
+   corepack pnpm run build
+   ```
+   Esto generará una carpeta `dist/` en la raíz. Estos archivos estáticos deben ser servidos utilizando un servidor web como **Nginx** o **Apache**. Recuerda configurar el servidor web para que redirija todas las peticiones a `index.html` (para que el enrutamiento de React Router funcione correctamente).
+
+2. **Construir el Backend (Node.js):**
+   Dentro de la carpeta `server/`, ejecuta:
+   ```powershell
+   cd server
+   corepack pnpm run build
+   ```
+   Esto compilará el código TypeScript en JavaScript dentro de la carpeta `server/dist/`.
+
+3. **Configurar el Entorno de Producción:**
+   Asegúrate de que el archivo `.env` en el servidor tenga credenciales de base de datos de producción y que el frontend esté apuntando a la URL pública de la API.
+
+4. **Ejecutar el Backend con un Gestor de Procesos (PM2):**
+   Para mantener el servidor backend vivo en producción de manera estable, instala PM2 y arranca el servicio:
+   ```bash
+   npm install -g pm2
+   pm2 start dist/index.js --name "tec-backend"
+   pm2 save
+   ```
+
+---
 
 - **Frontend:** React 18, TypeScript, Vite 6, TailwindCSS v4, shadcn/ui.
 - **Backend:** Node.js, Express, TypeScript, Zod (validaciones API), pdfkit & archiver (generación de documentos históricos).
@@ -88,3 +119,9 @@ A continuación, se detalla el progreso y las implementaciones confirmadas en el
 ### 6. Perfeccionamiento de Interfaces (UI/UX)
 - Se aplicó un rediseño de **Glassmorphism** y un esquema de colores más rico y dinámico a los dashboards de Coordinador (tonos verde difuminado) y Administrador (tonos azul claro).
 - Se agregaron tarjetas de estado (semestre, cuotas, estadísticas) con degradados sutiles que mejoran la sensación de profundidad.
+
+### 7. Seguridad Integral (Hardening)
+- **Migración a Hashes Seguros:** El backend detecta credenciales en texto plano (como las heredadas de versiones de prueba) y, al primer inicio de sesión exitoso, migra automáticamente la clave cifrándola de forma robusta con `bcrypt`.
+- **Protección contra Fuerza Bruta:** Se configuró `express-rate-limit` en la ruta `/login` para bloquear IPs que superen un umbral de intentos fallidos.
+- **Blindaje de Rutas GET:** Todas las rutas del backend que extraen datos masivos (usuarios, pagos, docentes) se han protegido con el middleware `requireAuth`, impidiendo que agentes externos sin sesión consulten información delicada.
+- **Protección de Portales:** El frontend tiene controles estrictos que expulsan inmediatamente intentos de login cruzados (por ejemplo, tratar de entrar como `docente` en el portal de `admin`), cerrando y destruyendo el token del navegador.

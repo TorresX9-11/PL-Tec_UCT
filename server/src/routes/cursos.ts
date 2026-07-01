@@ -19,8 +19,8 @@ import * as cursos from '../controllers/cursos.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(cursos.list));
-router.get('/:id_carrera/:id_curso', asyncHandler(cursos.getOne));
+router.get('/', requireAuth, asyncHandler(cursos.list));
+router.get('/:id_carrera/:id_curso', requireAuth, asyncHandler(cursos.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(cursos.create));
 router.put('/:id_carrera/:id_curso', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(cursos.update));
 router.delete('/:id_carrera/:id_curso', requireAuth, requireLevel('admin'), asyncHandler(cursos.remove));

@@ -132,9 +132,9 @@ export function DocenteBoletas() {
 
       await uploadFisico(archivoSelect, docente.correo, ruta);
       
-      // Update the pago to mark the boleta as 'Subida'
+      // Update the pago to mark the boleta as 'Subida' and clear any observations
       if (pago) {
-        await updatePago(pago.id, { boletaEstado: 'Subida' });
+        await updatePago(pago.id, { boletaEstado: 'Subida', notas: null });
       }
       
       toast.success('Boleta subida exitosamente');

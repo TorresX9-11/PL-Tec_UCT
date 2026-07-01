@@ -17,8 +17,8 @@ import * as carreras from '../controllers/carreras.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(carreras.list));
-router.get('/:id', asyncHandler(carreras.getOne));
+router.get('/', requireAuth, asyncHandler(carreras.list));
+router.get('/:id', requireAuth, asyncHandler(carreras.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(carreras.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(carreras.update));
 router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(carreras.remove));

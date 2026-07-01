@@ -3,6 +3,7 @@ import { LogOut, Users, FileText } from 'lucide-react';
 import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { toast } from 'sonner';
 import { RequirePasswordChange } from './RequirePasswordChange';
+import { logout } from '../data/auth';
 
 export function AdminLayout() {
   const location = useLocation();
@@ -13,6 +14,7 @@ export function AdminLayout() {
   };
 
   const handleLogout = () => {
+    logout();
     toast.success('Sesión cerrada');
     navigate('/admin/login');
   };

@@ -25,15 +25,19 @@ export function AdminLogin() {
       // Login real contra el backend (POST /auth/login → JWT)
       const user = await login(username, password);
 
-      // El módulo de administración solo admite usuarios de nivel admin.
-      if (user.nivel !== 'admin') {
+      // El módulo de administración solo admite usuarios de nivel admin o supervisor.
+      if (user.nivel !== 'admin' && user.nivel !== 'supervisor') {
         logout();
-        toast.error('Este usuario no tiene permisos de administración.');
+        toast.error('Este usuario no tiene permisos de administración ni supervisión.');
         return;
       }
 
       toast.success('Inicio de sesión exitoso');
-      navigate('/admin/dashboard');
+      if (user.nivel === 'supervisor') {
+        navigate('/supervisor/dashboard');
+      } else {
+        navigate('/admin/dashboard');
+      }
     } catch (err) {
       // Fallback de desarrollo: si el backend no está disponible, permitir la
       // credencial legacy admin/admin para no bloquear el trabajo local.

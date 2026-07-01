@@ -20,12 +20,9 @@ export function AcademicLogin() {
   const applyRealSession = (user: AuthUser) => {
     switch (user.nivel) {
       case 'admin':
-        toast.success('Inicio de sesión exitoso');
-        navigate('/admin/dashboard');
-        return;
       case 'supervisor': {
-        toast.success(`Bienvenido/a ${user.nombre ?? user.correo}`);
-        navigate('/supervisor/dashboard');
+        import('../../data/auth').then(({ logout }) => logout());
+        toast.error('Portal incorrecto. Por favor, inicia sesión desde el portal de administración.');
         return;
       }
       case 'coordinador': {

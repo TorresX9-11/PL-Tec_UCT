@@ -17,8 +17,8 @@ import * as propuestas from '../controllers/propuestas.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(propuestas.list));
-router.get('/:id', asyncHandler(propuestas.getOne));
+router.get('/', requireAuth, asyncHandler(propuestas.list));
+router.get('/:id', requireAuth, asyncHandler(propuestas.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(propuestas.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(propuestas.update));
 router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(propuestas.remove));

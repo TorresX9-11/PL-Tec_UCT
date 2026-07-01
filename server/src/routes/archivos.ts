@@ -43,8 +43,8 @@ const upload = multer({ storage });
  */
 const router = Router();
 
-router.get('/', asyncHandler(archivos.list));
-router.get('/:id', asyncHandler(archivos.getOne));
+router.get('/', requireAuth, asyncHandler(archivos.list));
+router.get('/:id', requireAuth, asyncHandler(archivos.getOne));
 router.post('/', requireAuth, asyncHandler(archivos.create));
 router.post('/upload', requireAuth, upload.single('archivo'), asyncHandler(archivos.uploadFisico));
 router.put('/:id', requireAuth, asyncHandler(archivos.update));

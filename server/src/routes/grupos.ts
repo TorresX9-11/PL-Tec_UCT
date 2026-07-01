@@ -17,8 +17,8 @@ import * as grupos from '../controllers/grupos.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(grupos.list));
-router.get('/:id', asyncHandler(grupos.getOne));
+router.get('/', requireAuth, asyncHandler(grupos.list));
+router.get('/:id', requireAuth, asyncHandler(grupos.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(grupos.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(grupos.update));
 router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(grupos.remove));

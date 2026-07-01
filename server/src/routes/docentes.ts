@@ -17,8 +17,8 @@ import * as docentes from '../controllers/docentes.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(docentes.list));
-router.get('/:id', asyncHandler(docentes.getOne));
+router.get('/', requireAuth, asyncHandler(docentes.list));
+router.get('/:id', requireAuth, asyncHandler(docentes.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(docentes.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'coordinador'), asyncHandler(docentes.update));
 router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(docentes.remove));

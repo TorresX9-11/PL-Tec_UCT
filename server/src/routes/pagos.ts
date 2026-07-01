@@ -17,8 +17,8 @@ import * as pagos from '../controllers/pagos.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(pagos.list));
-router.get('/:id', asyncHandler(pagos.getOne));
+router.get('/', requireAuth, asyncHandler(pagos.list));
+router.get('/:id', requireAuth, asyncHandler(pagos.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'supervisor', 'coordinador'), asyncHandler(pagos.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'supervisor', 'coordinador', 'docente'), asyncHandler(pagos.update));
 router.delete('/:id', requireAuth, requireLevel('admin'), asyncHandler(pagos.remove));

@@ -14,8 +14,8 @@ import * as capacitaciones from '../controllers/capacitaciones.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(capacitaciones.list));
-router.get('/:id', asyncHandler(capacitaciones.getOne));
+router.get('/', requireAuth, asyncHandler(capacitaciones.list));
+router.get('/:id', requireAuth, asyncHandler(capacitaciones.getOne));
 router.post('/', requireAuth, asyncHandler(capacitaciones.create));
 router.put('/:id', requireAuth, asyncHandler(capacitaciones.update));
 router.delete('/:id', requireAuth, asyncHandler(capacitaciones.remove));

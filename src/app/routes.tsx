@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import { RequireAuth } from './components/RequireAuth';
 import { LandingPage } from './pages/LandingPage';
 import { AdminLogin } from './pages/admin/AdminLogin';
 import { AcademicLogin } from './pages/academic/AcademicLogin';
@@ -44,7 +45,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/admin',
-    Component: AdminLayout,
+    Component: () => (
+      <RequireAuth allowedRoles={['admin']} redirectTo="/admin/login">
+        <AdminLayout />
+      </RequireAuth>
+    ),
     children: [
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'carreras-asignaturas', Component: CarrerasAsignaturas },
@@ -59,7 +64,11 @@ export const router = createBrowserRouter([
   // Módulo Supervisor de Coordinadores
   {
     path: '/supervisor',
-    Component: SupervisorLayout,
+    Component: () => (
+      <RequireAuth allowedRoles={['supervisor']} redirectTo="/admin/login">
+        <SupervisorLayout />
+      </RequireAuth>
+    ),
     children: [
       { path: 'dashboard', Component: SupervisorDashboard },
       { path: 'coordinadores', Component: Coordinadores },
@@ -74,7 +83,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/academico',
-    Component: AcademicLayout,
+    Component: () => (
+      <RequireAuth allowedRoles={['coordinador']} redirectTo="/academico/login">
+        <AcademicLayout />
+      </RequireAuth>
+    ),
     children: [
       { path: 'dashboard', Component: AcademicDashboard },
       { path: 'plataforma-docentes', Component: PlataformaDocentes },
@@ -88,7 +101,11 @@ export const router = createBrowserRouter([
   // Módulo Docente
   {
     path: '/docente',
-    Component: DocenteLayout,
+    Component: () => (
+      <RequireAuth allowedRoles={['docente']} redirectTo="/">
+        <DocenteLayout />
+      </RequireAuth>
+    ),
     children: [
       { path: 'dashboard', Component: DocenteDashboard },
       { path: 'cv', Component: DocenteCV },

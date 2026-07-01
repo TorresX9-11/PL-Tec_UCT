@@ -17,8 +17,8 @@ import * as usuarios from '../controllers/usuarios.controller.js';
  */
 const router = Router();
 
-router.get('/', asyncHandler(usuarios.list));
-router.get('/:id', asyncHandler(usuarios.getOne));
+router.get('/', requireAuth, asyncHandler(usuarios.list));
+router.get('/:id', requireAuth, asyncHandler(usuarios.getOne));
 router.post('/', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.create));
 router.put('/:id', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.update));
 router.put('/:id/reset-password', requireAuth, requireLevel('admin', 'supervisor'), asyncHandler(usuarios.resetPassword));

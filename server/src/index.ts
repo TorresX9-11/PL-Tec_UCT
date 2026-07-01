@@ -26,9 +26,17 @@ async function main(): Promise<void> {
 
   app.disable('x-powered-by');
   app.use(helmet({
-    crossOriginResourcePolicy: false,
-    xFrameOptions: false,
-    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'"],
+      }
+    }
   }));
   app.use(
     cors({

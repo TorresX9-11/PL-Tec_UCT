@@ -5,6 +5,7 @@ import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { toast } from 'sonner';
 import { listPagos } from '../data/pagos';
 import { RequirePasswordChange } from './RequirePasswordChange';
+import { logout } from '../data/auth';
 
 export function DocenteLayout() {
   const location = useLocation();
@@ -15,8 +16,7 @@ export function DocenteLayout() {
   };
 
   const handleLogout = () => {
-    // Limpiar flags de sesión
-    sessionStorage.removeItem('docente_check_mensajes');
+    logout();
     toast.success('Sesión cerrada');
     navigate('/academico/login');
   };

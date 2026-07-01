@@ -3,6 +3,7 @@ import { LogOut, LayoutDashboard, Users, UserCog } from 'lucide-react';
 import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { toast } from 'sonner';
 import { RequirePasswordChange } from './RequirePasswordChange';
+import { logout } from '../data/auth';
 
 export function SupervisorLayout() {
   const location = useLocation();
@@ -13,6 +14,7 @@ export function SupervisorLayout() {
   };
 
   const handleLogout = () => {
+    logout();
     toast.success('Sesión cerrada');
     sessionStorage.removeItem('supervisorId');
     sessionStorage.removeItem('supervisorNombre');

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Bell, LogOut, ArrowLeftCircle } from 'lucide-react';
 import tecLogo from '../../styles/Logo TEC Dirección_01.png';
 import { RequirePasswordChange } from './RequirePasswordChange';
+import { logout } from '../data/auth';
 
 export function AcademicLayout() {
   const location = useLocation();
@@ -43,9 +44,7 @@ export function AcademicLayout() {
   }, [navigate, isSupervising]);
 
   const handleLogout = () => {
-    sessionStorage.removeItem('userRole');
-    sessionStorage.removeItem('userName');
-    sessionStorage.removeItem('modoSupervision');
+    logout();
     toast.success('Sesión cerrada');
     navigate('/academico/login');
   };
